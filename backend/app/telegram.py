@@ -116,7 +116,7 @@ class TelegramBridge:
             # Commands can pair the chat, but are not stored as notes.
             if not content or content.startswith("/"):
                 return
-            await create_note(session, content)
+            await create_note(session, content, source="telegram")
         self.last_message_at = datetime.now(timezone.utc)
 
     async def send_message(self, content: str) -> bool:

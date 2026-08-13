@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { notesApi, websocketUrl } from '@/api';
-import { CheckIcon, InboxIcon, SearchIcon, WifiIcon, XIcon } from '@/components/Icons';
+import { CheckIcon, SearchIcon, XIcon } from '@/components/Icons';
 import { NoteRow } from '@/components/NoteRow';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import type { Note, NoteEvent, NoteUpdate, TelegramStatus } from '@/types';
 
 type ConnectionState = 'connecting' | 'connected' | 'offline';
@@ -16,12 +17,12 @@ function newestFirst(notes: Note[]): Note[] {
 function Section({ title, count, children }: { title: string; count: number; children: ReactNode }) {
   if (!count) return null;
   return (
-    <section className="mb-7">
-      <div className="mb-2 flex items-center gap-2 px-1">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{title}</h2>
-        <span className="text-[11px] tabular-nums text-zinc-700">{count}</span>
+    <section className="section">
+      <div className="section-header">
+        <span className="section-label">{title}</span>
+        <span className="section-count">{count}</span>
       </div>
-      <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-[#111112]">{children}</div>
+      {children}
     </section>
   );
 }
@@ -186,105 +187,120 @@ export default function App() {
   const telegramLabel = !telegram
     ? 'Checking Telegram…'
     : !telegram.configured
-      ? 'Telegram is not configured'
+      ? 'Telegram not configured'
       : !telegram.target_ready
-        ? 'Send the bot one message to pair'
+        ? 'Send the bot a message to pair'
         : telegram.last_error
           ? telegram.last_error
-          : 'Two-way Telegram connected';
-  const telegramTone = telegram?.configured && telegram.target_ready && !telegram.last_error
-    ? 'text-emerald-800'
-    : 'text-amber-800';
+          : 'Telegram connected';
+  const telegramOk = telegram?.configured && telegram.target_ready && !telegram.last_error;
 
   return (
-    <main className="min-h-screen bg-[#090909] px-3 py-6 text-zinc-100 antialiased sm:py-10">
-      <div className="mx-auto w-full max-w-[420px]">
-        <header className="mb-6 flex items-start justify-between px-1">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <InboxIcon size={18} className="text-zinc-400" />
-              <h1 className="text-[17px] font-semibold tracking-tight">Memory Inbox</h1>
-            </div>
-            <p className="mt-1.5 pl-[29px] text-xs text-zinc-600">
-              {openCount === 0 ? 'Inbox clear' : `${openCount} open ${openCount === 1 ? 'note' : 'notes'}`}
-            </p>
+    <div className="app-shell">
+      {/* ── Header ── */}
+      <header className="app-header">
+        <div className="app-header-inner">
+          <div className="header-left">
+            <h1 className="header-title">Inbox</h1>
+            <span className="header-count">
+              {openCount === 0 ? 'Clear' : openCount}
+            </span>
           </div>
-          <div
-            title={connection === 'connected' ? 'Live updates connected' : 'Live updates reconnecting'}
-            className={`mt-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider ${
-              connection === 'connected' ? 'text-emerald-700' : 'text-zinc-700'
-            }`}
-          >
-            <WifiIcon size={12} /> {connection === 'connected' ? 'live' : 'offline'}
-          </div>
-        </header>
 
-        <form onSubmit={(event) => void addNote(event)} className="mb-3 flex gap-2">
-          <input
-            autoFocus
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Send a note to Telegram…"
-            maxLength={4000}
-            aria-label="New note"
-            className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-[#131314] px-3.5 py-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-zinc-600"
-          />
-          <button
-            type="submit"
-            disabled={!draft.trim() || saving}
-            aria-label="Save and send note"
-            title="Save to inbox and send to Telegram"
-            className="flex w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-100 text-lg text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:bg-[#151515] disabled:text-zinc-700"
-          >
-            {saving ? <span className="animate-spin text-sm">◌</span> : '+'}
-          </button>
-        </form>
-
-        <div className="relative mb-7">
-          <SearchIcon size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-700" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search notes"
-            aria-label="Search notes"
-            className="w-full rounded-lg border border-transparent bg-transparent py-2 pl-9 pr-8 text-xs text-zinc-300 outline-none placeholder:text-zinc-700 focus:border-white/[0.06] focus:bg-[#0f0f10]"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-700 hover:text-zinc-300"
+          <div className="header-right">
+            <div
+              title={connection === 'connected' ? 'Live updates connected' : 'Reconnecting…'}
+              className={`live-indicator ${connection === 'connected' ? 'connected' : 'offline'}`}
             >
-              <XIcon size={13} />
-            </button>
+              <span className="live-dot" />
+              {connection === 'connected' ? 'Live' : 'Offline'}
+            </div>
+            <ThemeToggle />
+          </div>
+        </div>
+      </header>
+
+      {/* ── Content ── */}
+      <div className="content-area">
+        <div className="content-inner">
+          {/* Search */}
+          <div className="search-bar">
+            <SearchIcon size={13} className="search-icon" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search…"
+              aria-label="Search notes"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+                className="search-clear"
+              >
+                <XIcon size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Error */}
+          {error && <div className="error-banner">{error}</div>}
+
+          {/* Notes */}
+          {loading ? (
+            <div className="loading-spinner">
+              <div className="spinner" />
+            </div>
+          ) : (
+            <>
+              <Section title="Pinned" count={pinned.length}>{pinned.map(renderNote)}</Section>
+              <Section title="Inbox" count={inbox.length}>{inbox.map(renderNote)}</Section>
+              <Section title="Done" count={done.length}>{done.map(renderNote)}</Section>
+
+              {visible.length === 0 && (
+                <div className="empty-state">
+                  <div className="empty-state-icon">
+                    {search ? <SearchIcon size={20} /> : <CheckIcon size={20} />}
+                  </div>
+                  <p className="empty-state-title">{search ? 'No results' : 'All clear'}</p>
+                  <p className="empty-state-sub">{search ? 'Try a different search' : 'Notes you send will appear here'}</p>
+                </div>
+              )}
+            </>
           )}
         </div>
-
-        {error && <div className="mb-5 rounded-lg border border-red-950 bg-red-950/20 px-3 py-2 text-xs text-red-400">{error}</div>}
-
-        {loading ? (
-          <div className="flex justify-center py-16 text-zinc-700"><span className="animate-spin">◌</span></div>
-        ) : (
-          <>
-            <Section title="Pinned" count={pinned.length}>{pinned.map(renderNote)}</Section>
-            <Section title="Inbox" count={inbox.length}>{inbox.map(renderNote)}</Section>
-            <Section title="Done" count={done.length}>{done.map(renderNote)}</Section>
-
-            {visible.length === 0 && (
-              <div className="flex flex-col items-center py-16 text-center">
-                {search ? <SearchIcon size={22} className="mb-3 text-zinc-800" /> : <CheckIcon size={22} className="mb-3 text-zinc-800" />}
-                <p className="text-sm text-zinc-600">{search ? 'No matching notes' : 'Nothing here'}</p>
-                <p className="mt-1 text-xs text-zinc-800">{search ? 'Try another search' : 'Send a thought from here or Telegram'}</p>
-              </div>
-            )}
-          </>
-        )}
-
-        <footer className={`mt-8 pb-3 text-center text-[10px] uppercase tracking-[0.14em] ${telegramTone}`}>
-          {telegramLabel}
-        </footer>
       </div>
-    </main>
+
+      {/* ── Composer ── */}
+      <div className="composer">
+        <div className="composer-inner">
+          <form onSubmit={(event) => void addNote(event)} className="composer-row">
+            <input
+              autoFocus
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Write a note…"
+              maxLength={4000}
+              aria-label="New note"
+              className="composer-input"
+            />
+            <button
+              type="submit"
+              disabled={!draft.trim() || saving}
+              aria-label="Send"
+              title="Save and send to Telegram"
+              className="composer-send"
+            >
+              {saving ? <span className="spin">↻</span> : 'Send'}
+            </button>
+          </form>
+
+          <div className={`app-footer ${telegramOk ? 'status-ok' : 'status-warn'}`}>
+            {telegramLabel}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

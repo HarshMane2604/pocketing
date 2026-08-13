@@ -29,3 +29,27 @@ export const CheckIcon = (props: IconProps) => <Icon {...props}><path d="m5 12 4
 export const CircleIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /></Icon>;
 export const WifiIcon = (props: IconProps) => <Icon {...props}><path d="M5 12.5a10 10 0 0 1 14 0" /><path d="M8.5 16a5 5 0 0 1 7 0" /><path d="M12 20h.01" /></Icon>;
 export const XIcon = (props: IconProps) => <Icon {...props}><path d="m6 6 12 12M18 6 6 18" /></Icon>;
+
+/* Theme toggle icons */
+export const SunIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2" /><path d="M12 20v2" />
+    <path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" />
+    <path d="M2 12h2" /><path d="M20 12h2" />
+    <path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
+  </Icon>
+);
+
+export const MoonIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+  </Icon>
+);
+
+/* Send arrow icon */
+export const SendIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m5 12 14-7-4 7 4 7Z" fill="currentColor" stroke="none" />
+  </Icon>
+);

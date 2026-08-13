@@ -19,43 +19,50 @@ interface NoteRowProps {
 }
 
 export function NoteRow({ note, busy, onUpdate, onDelete }: NoteRowProps) {
+  const cls = [
+    'note-row',
+    `source-${note.source || 'web'}`,
+    note.is_pinned && !note.is_done ? 'pinned' : '',
+    note.is_done ? 'done' : '',
+  ].filter(Boolean).join(' ');
+
   return (
-    <article className="group flex gap-3 border-b border-white/[0.055] px-3 py-3.5 last:border-b-0 hover:bg-white/[0.025]">
+    <article className={cls}>
       <button
         type="button"
         onClick={() => onUpdate(note, { is_done: !note.is_done })}
         disabled={busy}
         aria-label={note.is_done ? 'Move back to inbox' : 'Mark done'}
         title={note.is_done ? 'Move back to inbox' : 'Mark done'}
-        className="mt-0.5 shrink-0 text-zinc-600 transition hover:text-zinc-200 disabled:opacity-40"
+        className="note-check"
       >
-        {note.is_done ? <CheckIcon size={17} /> : <CircleIcon size={17} />}
+        {note.is_done ? <CheckIcon size={15} /> : <CircleIcon size={15} />}
       </button>
 
-      <div className="min-w-0 flex-1">
-        <p className={`whitespace-pre-wrap break-words text-[14px] leading-[1.45] ${
-          note.is_done ? 'text-zinc-600 line-through decoration-zinc-700' : 'text-zinc-200'
-        }`}>
+      <div className="note-bubble">
+        <p className={`note-content${note.is_done ? ' done-text' : ''}`}>
           {note.content}
         </p>
-        <div className="mt-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-700">
+        <div className="note-meta">
           <span>{relativeTime(note.created_at)}</span>
-          {note.is_pinned && <span>· pinned</span>}
+          {note.is_pinned && (
+            <span className="pin-badge">
+              · <PinIcon size={9} fill="currentColor" /> pinned
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="flex shrink-0 items-start gap-0.5 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+      <div className="note-actions">
         <button
           type="button"
           onClick={() => onUpdate(note, { is_pinned: !note.is_pinned })}
           disabled={busy}
           aria-label={note.is_pinned ? 'Unpin note' : 'Pin note'}
           title={note.is_pinned ? 'Unpin' : 'Pin'}
-          className={`rounded-md p-1.5 transition hover:bg-white/[0.06] disabled:opacity-40 ${
-            note.is_pinned ? 'text-zinc-200' : 'text-zinc-600 hover:text-zinc-300'
-          }`}
+          className={`note-action-btn${note.is_pinned ? ' pin-active' : ''}`}
         >
-          <PinIcon size={14} fill={note.is_pinned ? 'currentColor' : 'none'} />
+          <PinIcon size={13} fill={note.is_pinned ? 'currentColor' : 'none'} />
         </button>
         <button
           type="button"
@@ -63,9 +70,9 @@ export function NoteRow({ note, busy, onUpdate, onDelete }: NoteRowProps) {
           disabled={busy}
           aria-label="Delete note"
           title="Delete"
-          className="rounded-md p-1.5 text-zinc-700 transition hover:bg-red-950/30 hover:text-red-400 disabled:opacity-40"
+          className="note-action-btn danger"
         >
-          <TrashIcon size={14} />
+          <TrashIcon size={13} />
         </button>
       </div>
     </article>

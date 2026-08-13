@@ -39,6 +39,7 @@ class NoteResponse(BaseModel):
     created_at: datetime
     is_pinned: bool
     is_done: bool
+    source: str
 
     model_config = ConfigDict(from_attributes=True)
 

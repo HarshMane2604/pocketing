@@ -11,10 +11,10 @@ def serialize_note(note: Note) -> dict[str, object]:
     return NoteResponse.model_validate(note).model_dump(mode="json")
 
 
-async def create_note(session: AsyncSession, content: str) -> Note:
+async def create_note(session: AsyncSession, content: str, source: str = "web") -> Note:
     # WhatsApp Cloud API can be added as a webhook that validates Meta's
     # signature, extracts message text, and calls this same function.
-    note = Note(content=content.strip())
+    note = Note(content=content.strip(), source=source)
     session.add(note)
     await session.commit()
     await session.refresh(note)

@@ -4,6 +4,7 @@ export interface Note {
   created_at: string;
   is_pinned: boolean;
   is_done: boolean;
+  source: 'web' | 'telegram';
 }
 
 export type NoteUpdate = Partial<Pick<Note, 'content' | 'is_pinned' | 'is_done'>>;
