@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -34,3 +35,13 @@ async def initialize_database() -> None:
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        # create_all() does not add columns to an existing SQLite table.
+        # Backfill the source field introduced in v1 without losing old notes.
+        columns = await connection.execute(text("PRAGMA table_info(notes)"))
+        if "source" not in {row[1] for row in columns}:
+            await connection.execute(
+                text(
+                    "ALTER TABLE notes ADD COLUMN source VARCHAR(20) "
+                    "NOT NULL DEFAULT 'web'"
+                )
+            )

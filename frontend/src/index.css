@@ -414,6 +414,33 @@ button:disabled { cursor: default; }
   transition: color var(--transition-theme);
 }
 
+.note-content.editable { cursor: text; }
+
+.note-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--text-tertiary);
+  text-underline-offset: 2px;
+  transition: text-decoration-color var(--transition-fast);
+}
+
+.note-link:hover { text-decoration-color: currentColor; }
+
+.note-editor {
+  display: block;
+  width: 100%;
+  min-height: 76px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.55;
+  outline: none;
+}
+
 .note-content.done-text {
   text-decoration: line-through;
   text-decoration-color: var(--text-quaternary);
@@ -473,6 +500,8 @@ button:disabled { cursor: default; }
 .note-action-btn.pin-active {
   color: var(--pin-color);
 }
+
+.note-action-btn.copy-confirmed { color: var(--success); }
 
 .note-action-btn.danger:hover:not(:disabled) {
   background: var(--danger-muted);

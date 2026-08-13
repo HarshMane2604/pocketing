@@ -25,6 +25,7 @@ export const InboxIcon = (props: IconProps) => <Icon {...props}><path d="M4 5h16
 export const SearchIcon = (props: IconProps) => <Icon {...props}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></Icon>;
 export const PinIcon = (props: IconProps) => <Icon {...props}><path d="m15 4 5 5-4 2-3 5-5-5 5-3 2-4Z" /><path d="m9 15-5 5" /></Icon>;
 export const TrashIcon = (props: IconProps) => <Icon {...props}><path d="M4 7h16" /><path d="m9 7 1-3h4l1 3" /><path d="m6 7 1 13h10l1-13" /></Icon>;
+export const CopyIcon = (props: IconProps) => <Icon {...props}><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></Icon>;
 export const CheckIcon = (props: IconProps) => <Icon {...props}><path d="m5 12 4 4L19 6" /></Icon>;
 export const CircleIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /></Icon>;
 export const WifiIcon = (props: IconProps) => <Icon {...props}><path d="M5 12.5a10 10 0 0 1 14 0" /><path d="M8.5 16a5 5 0 0 1 7 0" /><path d="M12 20h.01" /></Icon>;

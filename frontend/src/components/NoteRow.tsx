@@ -1,5 +1,54 @@
-import { CheckIcon, CircleIcon, PinIcon, TrashIcon } from '@/components/Icons';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+
+import { CheckIcon, CircleIcon, CopyIcon, PinIcon, TrashIcon } from '@/components/Icons';
 import type { Note, NoteUpdate } from '@/types';
+
+const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+const trailingPunctuation = /[.,!?;:]+$/;
+
+function splitUrlEnding(rawUrl: string): { url: string; punctuation: string } {
+  let url = rawUrl;
+  let punctuation = '';
+  const simplePunctuation = url.match(trailingPunctuation)?.[0] ?? '';
+  if (simplePunctuation) {
+    url = url.slice(0, -simplePunctuation.length);
+    punctuation = simplePunctuation;
+  }
+
+  for (const [opening, closing] of [['(', ')'], ['[', ']'], ['{', '}']]) {
+    while (url.endsWith(closing)) {
+      const openingCount = url.split(opening).length - 1;
+      const closingCount = url.split(closing).length - 1;
+      if (closingCount <= openingCount) break;
+      url = url.slice(0, -1);
+      punctuation = closing + punctuation;
+    }
+  }
+  return { url, punctuation };
+}
+
+function linkedContent(content: string): ReactNode[] {
+  return content.split(urlPattern).map((part, index) => {
+    if (!part.match(/^https?:\/\//i) && !part.match(/^www\./i)) return part;
+
+    const { url, punctuation } = splitUrlEnding(part);
+    const href = url.match(/^www\./i) ? `https://${url}` : url;
+    return (
+      <span key={`${url}-${index}`}>
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => event.stopPropagation()}
+          className="note-link"
+        >
+          {url}
+        </a>
+        {punctuation}
+      </span>
+    );
+  });
+}
 
 function relativeTime(value: string): string {
   const date = new Date(value);
@@ -19,12 +68,48 @@ interface NoteRowProps {
 }
 
 export function NoteRow({ note, busy, onUpdate, onDelete }: NoteRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState(note.content);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<number | undefined>(undefined);
   const cls = [
     'note-row',
     `source-${note.source || 'web'}`,
     note.is_pinned && !note.is_done ? 'pinned' : '',
     note.is_done ? 'done' : '',
   ].filter(Boolean).join(' ');
+
+  useEffect(() => {
+    if (!editing) setEditContent(note.content);
+  }, [editing, note.content]);
+
+  useEffect(() => () => {
+    if (copyTimer.current) window.clearTimeout(copyTimer.current);
+  }, []);
+
+  function startEditing() {
+    if (busy) return;
+    setEditContent(note.content);
+    setEditing(true);
+  }
+
+  function finishEditing() {
+    const content = editContent.trim();
+    setEditing(false);
+    if (content && content !== note.content) onUpdate(note, { content });
+    if (!content) setEditContent(note.content);
+  }
+
+  async function copyNote() {
+    try {
+      await navigator.clipboard.writeText(note.content);
+      setCopied(true);
+      if (copyTimer.current) window.clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <article className={cls}>
@@ -40,9 +125,34 @@ export function NoteRow({ note, busy, onUpdate, onDelete }: NoteRowProps) {
       </button>
 
       <div className="note-bubble">
-        <p className={`note-content${note.is_done ? ' done-text' : ''}`}>
-          {note.content}
-        </p>
+        {editing ? (
+          <textarea
+            autoFocus
+            value={editContent}
+            onChange={(event) => setEditContent(event.target.value)}
+            onBlur={finishEditing}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setEditContent(note.content);
+                setEditing(false);
+              } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                finishEditing();
+              }
+            }}
+            maxLength={4000}
+            aria-label="Edit note"
+            className="note-editor"
+          />
+        ) : (
+          <p
+            onClick={startEditing}
+            title="Click to edit"
+            className={`note-content editable${note.is_done ? ' done-text' : ''}`}
+          >
+            {linkedContent(note.content)}
+          </p>
+        )}
         <div className="note-meta">
           <span>{relativeTime(note.created_at)}</span>
           {note.is_pinned && (
@@ -50,10 +160,20 @@ export function NoteRow({ note, busy, onUpdate, onDelete }: NoteRowProps) {
               · <PinIcon size={9} fill="currentColor" /> pinned
             </span>
           )}
+          {editing && <span>· Ctrl+Enter to save</span>}
         </div>
       </div>
 
       <div className="note-actions">
+        <button
+          type="button"
+          onClick={() => void copyNote()}
+          aria-label={copied ? 'Note copied' : 'Copy note'}
+          title={copied ? 'Copied' : 'Copy'}
+          className={`note-action-btn${copied ? ' copy-confirmed' : ''}`}
+        >
+          {copied ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
+        </button>
         <button
           type="button"
           onClick={() => onUpdate(note, { is_pinned: !note.is_pinned })}
