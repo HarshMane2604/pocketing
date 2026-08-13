@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Memory Inbox",
+  "short_name": "Inbox",
+  "description": "A tiny two-way inbox for laptop and phone notes.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#090909",
+  "theme_color": "#090909",
+  "orientation": "any",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

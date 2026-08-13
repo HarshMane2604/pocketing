@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Memory Inbox
+Comment=Tiny two-way note inbox
+Exec=/bin/bash @@LAUNCHER@@
+Icon=memory-inbox
+Terminal=false
+Categories=Utility;Productivity;
+StartupNotify=true
