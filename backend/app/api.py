@@ -30,7 +30,12 @@ async def list_notes(
     query = select(Note)
     if search and search.strip():
         query = query.where(Note.content.ilike(f"%{search.strip()}%"))
-    query = query.order_by(Note.is_done.asc(), Note.is_pinned.desc(), Note.created_at.desc())
+    query = query.order_by(
+        Note.is_done.asc(),
+        Note.is_pinned.desc(),
+        Note.created_at.desc(),
+        Note.id.desc(),
+    )
     result = await session.execute(query)
     return list(result.scalars().all())
 

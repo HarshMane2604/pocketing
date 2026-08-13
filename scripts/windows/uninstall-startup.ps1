@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$taskName = 'Memory Inbox Service'
+$taskName = 'Pocketing Service'
 
 if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -7,8 +7,8 @@ if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
 }
 
 $shortcuts = @(
-    (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Memory Inbox.lnk'),
-    (Join-Path ([Environment]::GetFolderPath('Startup')) 'Memory Inbox.lnk')
+    (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Pocketing.lnk'),
+    (Join-Path ([Environment]::GetFolderPath('Startup')) 'Pocketing.lnk')
 )
 foreach ($shortcut in $shortcuts) {
     if (Test-Path -LiteralPath $shortcut -PathType Leaf) {
@@ -16,4 +16,4 @@ foreach ($shortcut in $shortcuts) {
     }
 }
 
-Write-Host 'Memory Inbox startup entries were removed. Notes and configuration were preserved.'
+Write-Host 'Pocketing startup entries were removed. Notes and configuration were preserved.'

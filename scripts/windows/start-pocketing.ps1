@@ -15,8 +15,8 @@ Set-Location -LiteralPath $backendDir
 # Keep this wrapper in the foreground so Task Scheduler can restart the service.
 # Uvicorn writes normal lifecycle messages to stderr, so use native-process
 # redirection instead of letting PowerShell treat those messages as failures.
-$stdoutLog = Join-Path $logDir 'memory-inbox.log'
-$stderrLog = Join-Path $logDir 'memory-inbox-error.log'
+$stdoutLog = Join-Path $logDir 'pocketing.log'
+$stderrLog = Join-Path $logDir 'pocketing-error.log'
 $process = Start-Process -FilePath $python `
     -ArgumentList @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8010') `
     -WorkingDirectory $backendDir `

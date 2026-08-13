@@ -9,9 +9,11 @@ import type { Note, NoteEvent, NoteUpdate, TelegramStatus } from '@/types';
 type ConnectionState = 'connecting' | 'connected' | 'offline';
 
 function newestFirst(notes: Note[]): Note[] {
-  return [...notes].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-  );
+  return [...notes].sort((a, b) => {
+    const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return b.id - a.id;
+  });
 }
 
 function Section({ title, count, children }: { title: string; count: number; children: ReactNode }) {
@@ -201,7 +203,7 @@ export default function App() {
       <header className="app-header">
         <div className="app-header-inner">
           <div className="header-left">
-            <h1 className="header-title">Inbox</h1>
+            <h1 className="header-title">Pocketing</h1>
             <span className="header-count">
               {openCount === 0 ? 'Clear' : openCount}
             </span>

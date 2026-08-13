@@ -1,4 +1,4 @@
-"""Memory Inbox FastAPI application."""
+"""Pocketing FastAPI application."""
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -28,7 +28,7 @@ async def lifespan(_: FastAPI):
     await engine.dispose()
 
 
-app = FastAPI(title="Memory Inbox API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Pocketing API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],

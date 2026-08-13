@@ -1,4 +1,4 @@
-const CACHE_NAME = 'memory-inbox-shell-v1';
+const CACHE_NAME = 'pocketing-shell-v1';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/app-icon.svg'];
 
 self.addEventListener('install', (event) => {

@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Memory Inbox
+Name=Pocketing
 Comment=Tiny two-way note inbox
 Exec=/bin/bash @@LAUNCHER@@
-Icon=memory-inbox
+Icon=pocketing
 Terminal=false
 Categories=Utility;Productivity;
 StartupNotify=true

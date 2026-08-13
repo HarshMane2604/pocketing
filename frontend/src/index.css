@@ -356,9 +356,9 @@ button:disabled { cursor: default; }
 
 /* The Bubble itself */
 .note-bubble {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 80%;
+  max-width: none;
   padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid var(--border-secondary);

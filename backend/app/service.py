@@ -1,5 +1,6 @@
 """Shared note operations for browser and messaging bridges."""
 
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AppSetting, Note
@@ -11,10 +12,18 @@ def serialize_note(note: Note) -> dict[str, object]:
     return NoteResponse.model_validate(note).model_dump(mode="json")
 
 
-async def create_note(session: AsyncSession, content: str, source: str = "web") -> Note:
+async def create_note(
+    session: AsyncSession,
+    content: str,
+    source: str = "web",
+    created_at: datetime | None = None,
+) -> Note:
     # WhatsApp Cloud API can be added as a webhook that validates Meta's
     # signature, extracts message text, and calls this same function.
-    note = Note(content=content.strip(), source=source)
+    kwargs = {}
+    if created_at is not None:
+        kwargs["created_at"] = created_at
+    note = Note(content=content.strip(), source=source, **kwargs)
     session.add(note)
     await session.commit()
     await session.refresh(note)

@@ -23,21 +23,21 @@ mkdir -p "$HOME/.config/systemd/user" "$HOME/.config/autostart" "$HOME/.local/sh
 sed \
   -e "s|@@BACKEND_DIR@@|$backend_dir|g" \
   -e "s|@@PYTHON@@|$python_bin|g" \
-  "$script_dir/memory-inbox.service.template" \
-  > "$HOME/.config/systemd/user/memory-inbox.service"
+  "$script_dir/pocketing.service.template" \
+  > "$HOME/.config/systemd/user/pocketing.service"
 
-cp "$frontend_dir/public/icons/app-icon.svg" "$HOME/.local/share/icons/memory-inbox.svg"
-launcher="$script_dir/open-memory-inbox.sh"
-desktop_file="$HOME/.local/share/applications/memory-inbox.desktop"
+cp "$frontend_dir/public/icons/app-icon.svg" "$HOME/.local/share/icons/pocketing.svg"
+launcher="$script_dir/open-pocketing.sh"
+desktop_file="$HOME/.local/share/applications/pocketing.desktop"
 
 sed \
   -e "s|@@LAUNCHER@@|$launcher|g" \
-  "$script_dir/memory-inbox.desktop.template" \
+  "$script_dir/pocketing.desktop.template" \
   > "$desktop_file"
-cp "$desktop_file" "$HOME/.config/autostart/memory-inbox.desktop"
+cp "$desktop_file" "$HOME/.config/autostart/pocketing.desktop"
 
 chmod +x "$launcher"
 systemctl --user daemon-reload
-systemctl --user enable --now memory-inbox.service
+systemctl --user enable --now pocketing.service
 
-echo 'Memory Inbox is installed. It will run and open automatically at Linux login.'
+echo 'Pocketing is installed. It will run and open automatically at Linux login.'

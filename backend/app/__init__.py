@@ -1,1 +1,1 @@
-"""Memory Inbox backend package."""
+"""Pocketing backend package."""

@@ -1,4 +1,4 @@
-# Memory Inbox
+# Pocketing
 
 A tiny two-way dashboard for short notes sent between your laptop and Telegram.
 It has no AI, projects, tags, reminders, or productivity system—just one inbox.
@@ -28,7 +28,7 @@ cd C:\Users\harshmane\harsh1\notes_app
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\install-startup.ps1
 ```
 
-This builds the PWA, registers `Memory Inbox Service` in Task Scheduler, adds a
+This builds the PWA, registers `Pocketing Service` in Task Scheduler, adds a
 desktop shortcut, and opens the compact app window automatically at login.
 Uninstall the startup entries without deleting notes:
 
@@ -68,7 +68,7 @@ Copy-Item .env.example .env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8010
 ```
 
-The SQLite database is created automatically at `backend/data/memory_inbox.db`.
+The SQLite database is created automatically at `backend/data/pocketing.db`.
 
 #### Frontend
 

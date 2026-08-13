@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "sqlite+aiosqlite:///./data/memory_inbox.db"
+    database_url: str = "sqlite+aiosqlite:///./data/pocketing.db"
     frontend_origin: str = "http://localhost:5173"
     telegram_bot_token: str = ""
     telegram_allowed_chat_id: str = ""
