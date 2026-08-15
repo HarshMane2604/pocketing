@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     telegram_allowed_chat_id: str = ""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", ".env.development"),
         env_file_encoding="utf-8",
         extra="ignore",
     )

@@ -22,6 +22,7 @@ class Note(Base):
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_done: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     source: Mapped[str] = mapped_column(String(20), default="web", nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class AppSetting(Base):

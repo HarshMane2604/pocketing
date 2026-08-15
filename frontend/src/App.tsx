@@ -1,7 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+
 import { notesApi, websocketUrl } from '@/api';
 import { CheckIcon, SearchIcon, XIcon } from '@/components/Icons';
+import { SortableNoteRow } from '@/components/SortableNoteRow';
 import { NoteRow } from '@/components/NoteRow';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import type { Note, NoteEvent, NoteUpdate, TelegramStatus } from '@/types';
@@ -10,6 +27,12 @@ type ConnectionState = 'connecting' | 'connected' | 'offline';
 
 function newestFirst(notes: Note[]): Note[] {
   return [...notes].sort((a, b) => {
+    const pA = a.priority || 0;
+    const pB = b.priority || 0;
+    if (pA === 0 && pB !== 0) return 1;
+    if (pA !== 0 && pB === 0) return -1;
+    if (pA !== 0 && pB !== 0 && pA !== pB) return pA - pB;
+
     const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     if (timeDiff !== 0) return timeDiff;
     return b.id - a.id;
@@ -40,6 +63,30 @@ export default function App() {
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [telegram, setTelegram] = useState<TelegramStatus | null>(null);
   const reconnectTimer = useRef<number | undefined>(undefined);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  function handleDragEnd(event: DragEndEvent, list: Note[]) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = list.findIndex(n => n.id === active.id);
+      const newIndex = list.findIndex(n => n.id === over.id);
+      const newOrder = arrayMove(list, oldIndex, newIndex);
+      
+      setNotes(current => current.map(note => {
+        const index = newOrder.findIndex(n => n.id === note.id);
+        if (index !== -1) {
+          return { ...note, priority: index + 1 };
+        }
+        return note;
+      }));
+      
+      notesApi.reorder(newOrder.map(n => n.id)).catch((err: Error) => setError(err.message));
+    }
+  }
 
   const upsert = useCallback((incoming: Note) => {
     setNotes((current) => current.some((note) => note.id === incoming.id)
@@ -176,15 +223,26 @@ export default function App() {
     }
   }
 
-  const renderNote = (note: Note) => (
-    <NoteRow
-      key={note.id}
-      note={note}
-      busy={busyIds.has(note.id)}
-      onUpdate={(item, update) => void updateNote(item, update)}
-      onDelete={(item) => void deleteNote(item)}
-    />
-  );
+  const renderSortableList = (list: Note[], title: string) => {
+    if (list.length === 0) return null;
+    return (
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDragEnd(e, list)}>
+        <Section title={title} count={list.length}>
+          <SortableContext items={list.map((n) => n.id)} strategy={verticalListSortingStrategy}>
+            {list.map((note) => (
+              <SortableNoteRow
+                key={note.id}
+                note={note}
+                busy={busyIds.has(note.id)}
+                onUpdate={(item, update) => void updateNote(item, update)}
+                onDelete={(item) => void deleteNote(item)}
+              />
+            ))}
+          </SortableContext>
+        </Section>
+      </DndContext>
+    );
+  };
 
   const telegramLabel = !telegram
     ? 'Checking Telegram…'
@@ -256,9 +314,19 @@ export default function App() {
             </div>
           ) : (
             <>
-              <Section title="Pinned" count={pinned.length}>{pinned.map(renderNote)}</Section>
-              <Section title="Inbox" count={inbox.length}>{inbox.map(renderNote)}</Section>
-              <Section title="Done" count={done.length}>{done.map(renderNote)}</Section>
+              {renderSortableList(pinned, 'Pinned')}
+              {renderSortableList(inbox, 'Inbox')}
+              <Section title="Done" count={done.length}>
+                {done.map((note) => (
+                  <NoteRow
+                    key={note.id}
+                    note={note}
+                    busy={busyIds.has(note.id)}
+                    onUpdate={(item, update) => void updateNote(item, update)}
+                    onDelete={(item) => void deleteNote(item)}
+                  />
+                ))}
+              </Section>
 
               {visible.length === 0 && (
                 <div className="empty-state">

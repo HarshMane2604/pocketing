@@ -5,9 +5,10 @@ export interface Note {
   is_pinned: boolean;
   is_done: boolean;
   source: 'web' | 'telegram';
+  priority: number;
 }
 
-export type NoteUpdate = Partial<Pick<Note, 'content' | 'is_pinned' | 'is_done'>>;
+export type NoteUpdate = Partial<Pick<Note, 'content' | 'is_pinned' | 'is_done' | 'priority'>>;
 
 export type NoteEvent =
   | { type: 'note.created' | 'note.updated'; note: Note }

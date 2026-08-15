@@ -65,18 +65,25 @@ interface NoteRowProps {
   busy: boolean;
   onUpdate: (note: Note, update: NoteUpdate) => void;
   onDelete: (note: Note) => void;
+  dragHandleProps?: Record<string, any>;
+  isDragging?: boolean;
 }
 
-export function NoteRow({ note, busy, onUpdate, onDelete }: NoteRowProps) {
+export function NoteRow({ note, busy, onUpdate, onDelete, dragHandleProps, isDragging }: NoteRowProps) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(note.content);
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<number | undefined>(undefined);
+  
+  const tags = [...new Set(Array.from(note.content.matchAll(/(?:^|\s)#([a-zA-Z0-9_-]+)/g)).map(m => m[1]))];
+  const displayContent = note.content.replace(/(?:^|\s)#[a-zA-Z0-9_-]+/g, '').trim() || note.content;
+
   const cls = [
     'note-row',
     `source-${note.source || 'web'}`,
     note.is_pinned && !note.is_done ? 'pinned' : '',
     note.is_done ? 'done' : '',
+    isDragging ? 'is-dragging' : '',
   ].filter(Boolean).join(' ');
 
   useEffect(() => {
@@ -112,7 +119,7 @@ export function NoteRow({ note, busy, onUpdate, onDelete }: NoteRowProps) {
   }
 
   return (
-    <article className={cls}>
+    <article className={cls} {...(editing ? {} : dragHandleProps)}>
       <button
         type="button"
         onClick={() => onUpdate(note, { is_done: !note.is_done })}
@@ -125,12 +132,31 @@ export function NoteRow({ note, busy, onUpdate, onDelete }: NoteRowProps) {
       </button>
 
       <div className="note-bubble">
+        {tags.length > 0 && !editing && (
+          <div className="note-tags">
+            {tags.map(tag => {
+              const lower = tag.toLowerCase();
+              let displayTag = tag;
+              if (lower === 'important') displayTag = 'imp';
+              if (lower === 'urgent') displayTag = 'urg';
+              if (lower === 'todo') displayTag = 'todo';
+              if (lower === 'task') displayTag = 'task';
+              
+              return (
+                <span key={tag} className={`note-tag tag-${lower}`}>
+                  {displayTag}
+                </span>
+              );
+            })}
+          </div>
+        )}
         {editing ? (
           <textarea
             autoFocus
             value={editContent}
             onChange={(event) => setEditContent(event.target.value)}
             onBlur={finishEditing}
+            onPointerDown={(e) => e.stopPropagation()}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 setEditContent(note.content);
@@ -150,7 +176,7 @@ export function NoteRow({ note, busy, onUpdate, onDelete }: NoteRowProps) {
             title="Click to edit"
             className={`note-content editable${note.is_done ? ' done-text' : ''}`}
           >
-            {linkedContent(note.content)}
+            {linkedContent(displayContent)}
           </p>
         )}
         <div className="note-meta">

@@ -29,6 +29,10 @@ export const notesApi = {
     body: JSON.stringify(update),
   }),
   remove: (id: number) => request<void>(`/api/notes/${id}`, { method: 'DELETE' }),
+  reorder: (noteIds: number[]) => request<void>('/api/notes/reorder', {
+    method: 'PUT',
+    body: JSON.stringify({ note_ids: noteIds }),
+  }),
 };
 
 export function websocketUrl(): string {

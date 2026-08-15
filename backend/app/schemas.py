@@ -21,6 +21,7 @@ class NoteUpdate(BaseModel):
     content: str | None = Field(default=None, min_length=1, max_length=4000)
     is_pinned: bool | None = None
     is_done: bool | None = None
+    priority: int | None = None
 
     @field_validator("content")
     @classmethod
@@ -33,6 +34,10 @@ class NoteUpdate(BaseModel):
         return value
 
 
+class ReorderRequest(BaseModel):
+    note_ids: list[int]
+
+
 class NoteResponse(BaseModel):
     id: int
     content: str
@@ -40,6 +45,7 @@ class NoteResponse(BaseModel):
     is_pinned: bool
     is_done: bool
     source: str
+    priority: int
 
     model_config = ConfigDict(from_attributes=True)
 

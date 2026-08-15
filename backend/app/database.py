@@ -38,10 +38,18 @@ async def initialize_database() -> None:
         # create_all() does not add columns to an existing SQLite table.
         # Backfill the source field introduced in v1 without losing old notes.
         columns = await connection.execute(text("PRAGMA table_info(notes)"))
-        if "source" not in {row[1] for row in columns}:
+        column_names = {row[1] for row in columns}
+        if "source" not in column_names:
             await connection.execute(
                 text(
                     "ALTER TABLE notes ADD COLUMN source VARCHAR(20) "
                     "NOT NULL DEFAULT 'web'"
+                )
+            )
+        if "priority" not in column_names:
+            await connection.execute(
+                text(
+                    "ALTER TABLE notes ADD COLUMN priority INTEGER "
+                    "NOT NULL DEFAULT 0"
                 )
             )
