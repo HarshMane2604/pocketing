@@ -5,10 +5,24 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
-from app.models import Note
+from app.models import Note, ThreadMessage
 from app.realtime import connections
-from app.schemas import NoteCreate, NoteResponse, NoteUpdate, ReorderRequest
-from app.service import create_note, serialize_note
+from app.schemas import (
+    NoteCreate,
+    NoteResponse,
+    NoteUpdate,
+    ReorderRequest,
+    ThreadMessageCreate,
+    ThreadMessageResponse,
+)
+from app.service import (
+    create_note,
+    create_thread_message,
+    get_thread_count,
+    get_thread_counts,
+    serialize_note,
+    serialize_thread_message,
+)
 from app.telegram import telegram_bridge
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
@@ -26,7 +40,7 @@ async def get_note_or_404(note_id: int, session: AsyncSession) -> Note:
 async def list_notes(
     search: str | None = None,
     session: AsyncSession = Depends(get_session),
-) -> list[Note]:
+) -> list[dict]:
     query = select(Note)
     if search and search.strip():
         query = query.where(Note.content.ilike(f"%{search.strip()}%"))
@@ -39,7 +53,13 @@ async def list_notes(
         Note.id.desc(),
     )
     result = await session.execute(query)
-    return list(result.scalars().all())
+    notes = list(result.scalars().all())
+
+    # Batch-fetch thread counts
+    note_ids = [n.id for n in notes]
+    counts = await get_thread_counts(session, note_ids)
+
+    return [serialize_note(n, counts.get(n.id, 0)) for n in notes]
 
 
 @router.post("", response_model=NoteResponse, status_code=201)
@@ -68,8 +88,9 @@ async def reorder_notes(
             note = notes_by_id[note_id]
             if note.priority != index + 1:
                 note.priority = index + 1
+                tc = await get_thread_count(session, note.id)
                 # Broadcast each update individually
-                await connections.broadcast({"type": "note.updated", "note": serialize_note(note)})
+                await connections.broadcast({"type": "note.updated", "note": serialize_note(note, tc)})
 
     await session.commit()
     return Response(status_code=204)
@@ -86,7 +107,8 @@ async def update_note(
         setattr(note, field, value)
     await session.commit()
     await session.refresh(note)
-    await connections.broadcast({"type": "note.updated", "note": serialize_note(note)})
+    tc = await get_thread_count(session, note.id)
+    await connections.broadcast({"type": "note.updated", "note": serialize_note(note, tc)})
     return note
 
 
@@ -99,6 +121,60 @@ async def delete_note(
     await session.delete(note)
     await session.commit()
     await connections.broadcast({"type": "note.deleted", "id": note_id})
+    return Response(status_code=204)
+
+
+# ── Thread endpoints ──
+
+
+@router.get("/{note_id}/thread", response_model=list[ThreadMessageResponse])
+async def list_thread_messages(
+    note_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> list[ThreadMessage]:
+    await get_note_or_404(note_id, session)
+    query = (
+        select(ThreadMessage)
+        .where(ThreadMessage.note_id == note_id)
+        .order_by(ThreadMessage.created_at.asc(), ThreadMessage.id.asc())
+    )
+    result = await session.execute(query)
+    return list(result.scalars().all())
+
+
+@router.post("/{note_id}/thread", response_model=ThreadMessageResponse, status_code=201)
+async def add_thread_message(
+    note_id: int,
+    msg_in: ThreadMessageCreate,
+    session: AsyncSession = Depends(get_session),
+) -> ThreadMessage:
+    note = await get_note_or_404(note_id, session)
+    message = await create_thread_message(session, note, msg_in.content)
+    # Send thread reply to Telegram under the same note context
+    preview = note.content[:50] + ("…" if len(note.content) > 50 else "")
+    await telegram_bridge.send_message(f"💬 Re: {preview}\n{msg_in.content}")
+    return message
+
+
+@router.delete("/{note_id}/thread/{message_id}", status_code=204)
+async def delete_thread_message(
+    note_id: int,
+    message_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    await get_note_or_404(note_id, session)
+    message = await session.get(ThreadMessage, message_id)
+    if message is None or message.note_id != note_id:
+        raise HTTPException(status_code=404, detail="Thread message not found")
+    await session.delete(message)
+    await session.commit()
+    thread_count = await get_thread_count(session, note_id)
+    await connections.broadcast({
+        "type": "thread.deleted",
+        "message_id": message_id,
+        "note_id": note_id,
+        "thread_count": thread_count,
+    })
     return Response(status_code=204)
 
 

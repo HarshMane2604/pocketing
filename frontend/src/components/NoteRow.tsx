@@ -1,54 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
-import { CheckIcon, CircleIcon, CopyIcon, PinIcon, TrashIcon } from '@/components/Icons';
+import { CheckIcon, CircleIcon, CopyIcon, PinIcon, ThreadIcon, TrashIcon } from '@/components/Icons';
 import type { Note, NoteUpdate } from '@/types';
-
-const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-const trailingPunctuation = /[.,!?;:]+$/;
-
-function splitUrlEnding(rawUrl: string): { url: string; punctuation: string } {
-  let url = rawUrl;
-  let punctuation = '';
-  const simplePunctuation = url.match(trailingPunctuation)?.[0] ?? '';
-  if (simplePunctuation) {
-    url = url.slice(0, -simplePunctuation.length);
-    punctuation = simplePunctuation;
-  }
-
-  for (const [opening, closing] of [['(', ')'], ['[', ']'], ['{', '}']]) {
-    while (url.endsWith(closing)) {
-      const openingCount = url.split(opening).length - 1;
-      const closingCount = url.split(closing).length - 1;
-      if (closingCount <= openingCount) break;
-      url = url.slice(0, -1);
-      punctuation = closing + punctuation;
-    }
-  }
-  return { url, punctuation };
-}
-
-function linkedContent(content: string): ReactNode[] {
-  return content.split(urlPattern).map((part, index) => {
-    if (!part.match(/^https?:\/\//i) && !part.match(/^www\./i)) return part;
-
-    const { url, punctuation } = splitUrlEnding(part);
-    const href = url.match(/^www\./i) ? `https://${url}` : url;
-    return (
-      <span key={`${url}-${index}`}>
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(event) => event.stopPropagation()}
-          className="note-link"
-        >
-          {url}
-        </a>
-        {punctuation}
-      </span>
-    );
-  });
-}
 
 function relativeTime(value: string): string {
   const date = new Date(value);
@@ -65,11 +21,12 @@ interface NoteRowProps {
   busy: boolean;
   onUpdate: (note: Note, update: NoteUpdate) => void;
   onDelete: (note: Note) => void;
+  onOpenThread?: (note: Note) => void;
   dragHandleProps?: Record<string, any>;
   isDragging?: boolean;
 }
 
-export function NoteRow({ note, busy, onUpdate, onDelete, dragHandleProps, isDragging }: NoteRowProps) {
+export function NoteRow({ note, busy, onUpdate, onDelete, onOpenThread, dragHandleProps, isDragging }: NoteRowProps) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(note.content);
   const [copied, setCopied] = useState(false);
@@ -171,13 +128,13 @@ export function NoteRow({ note, busy, onUpdate, onDelete, dragHandleProps, isDra
             className="note-editor"
           />
         ) : (
-          <p
+          <div
             onClick={startEditing}
             title="Click to edit"
-            className={`note-content editable${note.is_done ? ' done-text' : ''}`}
+            className={`note-content editable prose prose-sm dark:prose-invert break-words max-w-none custom-prose${note.is_done ? ' done-text' : ''}`}
           >
-            {linkedContent(displayContent)}
-          </p>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{displayContent}</ReactMarkdown>
+          </div>
         )}
         <div className="note-meta">
           <span>{relativeTime(note.created_at)}</span>
@@ -191,6 +148,18 @@ export function NoteRow({ note, busy, onUpdate, onDelete, dragHandleProps, isDra
       </div>
 
       <div className="note-actions">
+        <button
+          type="button"
+          onClick={() => onOpenThread?.(note)}
+          aria-label="Open thread"
+          title="Thread"
+          className={`note-action-btn${note.thread_count > 0 ? ' has-thread' : ''}`}
+        >
+          <ThreadIcon size={13} />
+          {note.thread_count > 0 && (
+            <span className="thread-count-badge">{note.thread_count}</span>
+          )}
+        </button>
         <button
           type="button"
           onClick={() => void copyNote()}

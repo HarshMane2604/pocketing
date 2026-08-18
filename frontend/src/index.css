@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* ─── Design Tokens ─── */
 :root {
@@ -772,6 +773,233 @@ button:disabled {
   animation: spin 0.7s linear infinite;
 }
 
+/* ─── Thread Count Badge ─── */
+.note-action-btn {
+  position: relative;
+}
+
+.thread-count-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.note-action-btn.has-thread {
+  color: var(--text-secondary);
+}
+
+/* ─── Thread View ─── */
+.thread-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  animation: fadeIn 0.15s ease;
+}
+
+.thread-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  transition: background var(--transition-theme), border-color var(--transition-theme);
+}
+
+.thread-back-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.thread-back-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.thread-header-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.thread-header-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  transition: color var(--transition-theme);
+}
+
+.thread-header-note {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+  transition: color var(--transition-theme);
+}
+
+.thread-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.thread-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+  animation: fadeIn 0.15s ease both;
+}
+
+.thread-message-bubble {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+  border-top-left-radius: 2px;
+  transition: border-color var(--transition-theme), background var(--transition-theme);
+}
+
+.thread-message-content {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  transition: color var(--transition-theme);
+}
+
+.thread-message-time {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  transition: color var(--transition-theme);
+}
+
+.thread-message-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.thread-message:hover .thread-message-actions {
+  opacity: 1;
+}
+
+.thread-message-action-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--text-quaternary);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.thread-message-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.thread-message-action-btn.delete-btn:hover {
+  background: var(--danger-muted);
+  color: var(--danger);
+}
+
+.thread-message-action-btn.copy-confirmed {
+  color: var(--success);
+}
+
+.thread-composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-primary);
+  padding: 14px 20px;
+  background: var(--bg-primary);
+  transition: background var(--transition-theme), border-color var(--transition-theme);
+}
+
+@media (hover: none) {
+  .thread-message-actions {
+    opacity: 1;
+  }
+}
+
+/* ─── Markdown Prose Overrides ─── */
+.custom-prose h1, .custom-prose h2, .custom-prose h3, .custom-prose h4, .custom-prose h5, .custom-prose h6 {
+  margin-top: 0.75em !important;
+  margin-bottom: 0.25em !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+}
+.custom-prose h1 { font-size: 1.2em !important; }
+.custom-prose h2 { font-size: 1.1em !important; }
+.custom-prose h3 { font-size: 1em !important; }
+.custom-prose p { 
+  margin-top: 0.25em !important; 
+  margin-bottom: 0.25em !important; 
+  white-space: pre-wrap !important;
+}
+.custom-prose pre { 
+  margin-top: 0.5em !important; 
+  margin-bottom: 0.5em !important; 
+  padding: 0.75em !important; 
+  background-color: var(--bg-tertiary) !important;
+}
+.custom-prose code {
+  color: var(--text-primary) !important;
+  background-color: var(--bg-tertiary);
+  padding: 0.15em 0.3em;
+  border-radius: 4px;
+}
+.custom-prose pre code {
+  background-color: transparent;
+  padding: 0;
+}
+.custom-prose ul, .custom-prose ol { 
+  margin-top: 0.25em !important; 
+  margin-bottom: 0.25em !important; 
+}
+.custom-prose li { 
+  margin-top: 0 !important; 
+  margin-bottom: 0 !important; 
+  white-space: pre-wrap !important;
+}
+.custom-prose *:first-child { margin-top: 0 !important; }
+.custom-prose *:last-child { margin-bottom: 0 !important; }
+
 /* ─── Responsive ─── */
 @media (min-width: 640px) {
   .app-header {
@@ -783,6 +1011,18 @@ button:disabled {
   }
 
   .composer {
+    padding: 16px 32px;
+  }
+
+  .thread-header {
+    padding: 16px 32px;
+  }
+
+  .thread-messages {
+    padding: 20px 32px;
+  }
+
+  .thread-composer {
     padding: 16px 32px;
   }
 }

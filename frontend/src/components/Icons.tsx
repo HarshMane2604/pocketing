@@ -54,3 +54,17 @@ export const SendIcon = (props: IconProps) => (
     <path d="m5 12 14-7-4 7 4 7Z" fill="currentColor" stroke="none" />
   </Icon>
 );
+
+/* Thread / chat bubble icon */
+export const ThreadIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </Icon>
+);
+
+/* Back arrow icon */
+export const ArrowLeftIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m15 18-6-6 6-6" />
+  </Icon>
+);

@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterator
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -23,6 +23,14 @@ engine = create_async_engine(settings.database_url, echo=False)
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
+# Enable SQLite foreign key enforcement (required for ON DELETE CASCADE)
+@event.listens_for(engine.sync_engine, "connect")
+def _enable_sqlite_fks(dbapi_connection, _connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
 async def get_session() -> AsyncIterator[AsyncSession]:
     async with SessionLocal() as session:
         yield session
@@ -31,7 +39,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 async def initialize_database() -> None:
     # The default SQLite URL points here. Creating it is harmless for custom URLs.
     Path("data").mkdir(exist_ok=True)
-    from app.models import AppSetting, Note  # noqa: F401
+    from app.models import AppSetting, Note, ThreadMessage  # noqa: F401
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)

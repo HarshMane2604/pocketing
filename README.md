@@ -131,3 +131,6 @@ service already saves the note and broadcasts it to the frontend, so WhatsApp
 does not require frontend changes.
 "# pocketing" 
 "# pocketing" 
+
+## For Restarting Backend
+systemctl --user restart pocketing

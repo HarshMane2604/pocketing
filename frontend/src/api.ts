@@ -1,4 +1,4 @@
-import type { Note, NoteUpdate, RuntimeStatus } from '@/types';
+import type { Note, NoteUpdate, RuntimeStatus, ThreadMessage } from '@/types';
 
 const configuredUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
 const apiUrl = configuredUrl ?? '';
@@ -32,6 +32,17 @@ export const notesApi = {
   reorder: (noteIds: number[]) => request<void>('/api/notes/reorder', {
     method: 'PUT',
     body: JSON.stringify({ note_ids: noteIds }),
+  }),
+};
+
+export const threadApi = {
+  list: (noteId: number) => request<ThreadMessage[]>(`/api/notes/${noteId}/thread`),
+  create: (noteId: number, content: string) => request<ThreadMessage>(`/api/notes/${noteId}/thread`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  }),
+  remove: (noteId: number, messageId: number) => request<void>(`/api/notes/${noteId}/thread/${messageId}`, {
+    method: 'DELETE',
   }),
 };
 

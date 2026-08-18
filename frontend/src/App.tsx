@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
   DndContext,
@@ -20,6 +20,7 @@ import { notesApi, websocketUrl } from '@/api';
 import { CheckIcon, SearchIcon, XIcon } from '@/components/Icons';
 import { SortableNoteRow } from '@/components/SortableNoteRow';
 import { NoteRow } from '@/components/NoteRow';
+import { ThreadView } from '@/components/ThreadView';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import type { Note, NoteEvent, NoteUpdate, TelegramStatus } from '@/types';
 
@@ -62,6 +63,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [telegram, setTelegram] = useState<TelegramStatus | null>(null);
+  const [activeThread, setActiveThread] = useState<Note | null>(null);
   const reconnectTimer = useRef<number | undefined>(undefined);
 
   const sensors = useSensors(
@@ -137,8 +139,15 @@ export default function App() {
         const event = JSON.parse(message.data) as NoteEvent;
         if (event.type === 'note.deleted') {
           setNotes((current) => current.filter((note) => note.id !== event.id));
-        } else {
+          setActiveThread((current) => current?.id === event.id ? null : current);
+        } else if (event.type === 'note.created' || event.type === 'note.updated') {
           upsert(event.note);
+        } else if (event.type === 'thread.created' || event.type === 'thread.deleted') {
+          setNotes((current) =>
+            current.map((note) =>
+              note.id === event.note_id ? { ...note, thread_count: event.thread_count } : note
+            )
+          );
         }
       };
       socket.onclose = () => {
@@ -170,8 +179,8 @@ export default function App() {
   const done = newestFirst(visible.filter((note) => note.is_done));
   const openCount = notes.filter((note) => !note.is_done).length;
 
-  async function addNote(event: FormEvent) {
-    event.preventDefault();
+  async function addNote(event?: React.SyntheticEvent) {
+    event?.preventDefault();
     const content = draft.trim();
     if (!content || saving) return;
     setSaving(true);
@@ -223,6 +232,18 @@ export default function App() {
     }
   }
 
+  function handleOpenThread(note: Note) {
+    setActiveThread(note);
+  }
+
+  const handleThreadCountChange = useCallback((noteId: number, count: number) => {
+    setNotes((current) =>
+      current.map((note) =>
+        note.id === noteId ? { ...note, thread_count: count } : note
+      )
+    );
+  }, []);
+
   const renderSortableList = (list: Note[], title: string) => {
     if (list.length === 0) return null;
     return (
@@ -236,6 +257,7 @@ export default function App() {
                 busy={busyIds.has(note.id)}
                 onUpdate={(item, update) => void updateNote(item, update)}
                 onDelete={(item) => void deleteNote(item)}
+                onOpenThread={handleOpenThread}
               />
             ))}
           </SortableContext>
@@ -281,79 +303,96 @@ export default function App() {
       </header>
 
       {/* ── Content ── */}
-      <div className="content-area">
-        <div className="content-inner">
-          {/* Search */}
-          <div className="search-bar">
-            <SearchIcon size={13} className="search-icon" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search…"
-              aria-label="Search notes"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                aria-label="Clear search"
-                className="search-clear"
-              >
-                <XIcon size={12} />
-              </button>
+      {activeThread ? (
+        <ThreadView
+          note={activeThread}
+          onBack={() => setActiveThread(null)}
+          onThreadCountChange={handleThreadCountChange}
+        />
+      ) : (
+        <div className="content-area">
+          <div className="content-inner">
+            {/* Search */}
+            <div className="search-bar">
+              <SearchIcon size={13} className="search-icon" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search…"
+                aria-label="Search notes"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  aria-label="Clear search"
+                  className="search-clear"
+                >
+                  <XIcon size={12} />
+                </button>
+              )}
+            </div>
+
+            {/* Error */}
+            {error && <div className="error-banner">{error}</div>}
+
+            {/* Notes */}
+            {loading ? (
+              <div className="loading-spinner">
+                <div className="spinner" />
+              </div>
+            ) : (
+              <>
+                {renderSortableList(pinned, 'Pinned')}
+                {renderSortableList(inbox, 'Inbox')}
+                <Section title="Done" count={done.length}>
+                  {done.map((note) => (
+                    <NoteRow
+                      key={note.id}
+                      note={note}
+                      busy={busyIds.has(note.id)}
+                      onUpdate={(item, update) => void updateNote(item, update)}
+                      onDelete={(item) => void deleteNote(item)}
+                      onOpenThread={handleOpenThread}
+                    />
+                  ))}
+                </Section>
+
+                {visible.length === 0 && (
+                  <div className="empty-state">
+                    <div className="empty-state-icon">
+                      {search ? <SearchIcon size={20} /> : <CheckIcon size={20} />}
+                    </div>
+                    <p className="empty-state-title">{search ? 'No results' : 'All clear'}</p>
+                    <p className="empty-state-sub">{search ? 'Try a different search' : 'Notes you send will appear here'}</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
-
-          {/* Error */}
-          {error && <div className="error-banner">{error}</div>}
-
-          {/* Notes */}
-          {loading ? (
-            <div className="loading-spinner">
-              <div className="spinner" />
-            </div>
-          ) : (
-            <>
-              {renderSortableList(pinned, 'Pinned')}
-              {renderSortableList(inbox, 'Inbox')}
-              <Section title="Done" count={done.length}>
-                {done.map((note) => (
-                  <NoteRow
-                    key={note.id}
-                    note={note}
-                    busy={busyIds.has(note.id)}
-                    onUpdate={(item, update) => void updateNote(item, update)}
-                    onDelete={(item) => void deleteNote(item)}
-                  />
-                ))}
-              </Section>
-
-              {visible.length === 0 && (
-                <div className="empty-state">
-                  <div className="empty-state-icon">
-                    {search ? <SearchIcon size={20} /> : <CheckIcon size={20} />}
-                  </div>
-                  <p className="empty-state-title">{search ? 'No results' : 'All clear'}</p>
-                  <p className="empty-state-sub">{search ? 'Try a different search' : 'Notes you send will appear here'}</p>
-                </div>
-              )}
-            </>
-          )}
         </div>
-      </div>
+      )}
 
       {/* ── Composer ── */}
-      <div className="composer">
+      {!activeThread && <div className="composer">
         <div className="composer-inner">
           <form onSubmit={(event) => void addNote(event)} className="composer-row">
-            <input
+            <textarea
               autoFocus
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  void addNote();
+                }
+              }}
               placeholder="Write a note…"
               maxLength={4000}
               aria-label="New note"
               className="composer-input"
+              rows={1}
+              style={{ resize: 'none' }}
             />
             <button
               type="submit"
@@ -370,7 +409,7 @@ export default function App() {
             {telegramLabel}
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

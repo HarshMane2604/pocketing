@@ -8,6 +8,7 @@ interface SortableNoteRowProps {
   busy: boolean;
   onUpdate: (note: Note, update: NoteUpdate) => void;
   onDelete: (note: Note) => void;
+  onOpenThread?: (note: Note) => void;
 }
 
 export function SortableNoteRow(props: SortableNoteRowProps) {
