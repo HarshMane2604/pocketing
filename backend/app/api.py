@@ -1,5 +1,6 @@
 """HTTP and WebSocket routes."""
 
+from dataclasses import field
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect
@@ -392,8 +393,6 @@ async def get_file_info(
 
 
 # ── File serving ──
-
-
 @router.get("/files/{storage_key}")
 async def serve_file(
     storage_key: str,
@@ -420,7 +419,7 @@ async def serve_file(
         headers={"Content-Disposition": f'{disposition}; filename="{att.filename}"'},
     )
 
-
+# ── File Delete ──
 @router.delete("/files/{file_id}", status_code=204)
 async def delete_file(
     file_id: int,
@@ -459,6 +458,154 @@ async def delete_file(
             })
 
     return Response(status_code=204)
+
+# ── File content extraction ──
+@router.get("/files/{file_id}/content")
+async def read_file_content(
+    file_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    """Extract readable text from a stored file."""
+    query = (
+        select(Attachment)
+        .where(Attachment.id == file_id)
+    )
+
+    result = await session.execute(query)
+
+    att = result.scalar_one_or_none()
+
+    if att is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    file_path = Path(settings.upload_dir) / att.storage_key
+
+    if not file_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="File not found on the disk",
+        )
+
+    # -------------------------------------------------
+    # PDF
+    # -------------------------------------------------
+
+    if att.content_type == "application/pdf":
+        try:
+            import pymupdf
+            doc = pymupdf.open(file_path)
+            pages = []
+
+            for page in doc:
+                text = page.get_text()
+
+                if text.strip():
+                    pages.append(text)
+            doc.close()
+            extracted_text = "\n".join(pages).strip()
+
+            return {
+                "id": att.id,
+                "filename": att.filename,
+                "content_type": att.content_type,
+                "text": extracted_text,
+                "character_count": len(extracted_text),
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to extract pdf: {e}"
+            )
+    
+    # -------------------------------------------------
+    # Plain text
+    # -------------------------------------------------
+
+    if att.content_type.startswith("text/"):
+        try:
+            extracted_text = file_path.read_text(
+                encoding="utf-8",
+                errors="replace",
+            )
+            return {
+                "id": att.id,
+                "filename": att.filename,
+                "content_type": att.content_type,
+                "text": extracted_text,
+                "character_count": len(extracted_text),
+            }
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to read text file: {exc}",
+            )
+    
+    # -------------------------------------------------
+    # Unsupported
+    # -------------------------------------------------
+
+    return {
+        "id": att.id,
+        "filename": att.filename,
+        "content_type": att.content_type,
+        "text": None,
+        "error": "Text extraction is not supported for this file type yet.",
+    }
+
+# ── File send for Qwen ──
+@router.post("/files/{file_id}/send")
+async def send_file_to_telegram(file_id: int, session: AsyncSession=Depends(get_session,)) -> dict:
+    """Send an existing Pocketing file to Telegram."""
+
+    # find Attachment
+    att = await session.get(Attachment, file_id)
+
+    if att is None:
+        raise HTTPException(
+            status_code=404,
+            detail="File not found",
+        )
+    
+    # Find Physical file
+    upload_dir = Path(settings.upload_dir)
+    file_path = upload_dir/att.storage_key
+
+    if not file_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="File not found on disk",
+        )
+
+    await telegram_bridge.send_file(
+        file_path=file_path,
+        filename=att.filename,
+        caption=f"📎 {att.filename}",   
+    )
+
+    # Create a new note as a visible record of the send
+    from datetime import datetime, timezone
+    
+    time_str = datetime.now(timezone.utc).astimezone().strftime("%I:%M %p")
+    trace_note = Note(
+        content=f"📤 `{att.filename}` sent to Telegram at {time_str}",
+        source="system",
+    )
+    session.add(trace_note)
+    await session.commit()
+    await session.refresh(trace_note, attribute_names=["attachments"])
+    
+    await connections.broadcast({
+        "type": "note.created",
+        "note": serialize_note(trace_note, 0),
+    })
+
+    return {
+        "status": "sent",
+        "file_id": att.id,
+        "filename": att.filename,
+        "content_type": att.content_type,
+        "size_bytes": att.size_bytes,
+    }
 
 
 # ── WebSocket ──
