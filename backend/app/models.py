@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -27,6 +27,13 @@ class Note(Base):
     thread_messages: Mapped[list["ThreadMessage"]] = relationship(
         "ThreadMessage", back_populates="note", cascade="all, delete-orphan", passive_deletes=True
     )
+    attachments: Mapped[list["Attachment"]] = relationship(
+        "Attachment",
+        back_populates="note",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        foreign_keys="Attachment.note_id",
+    )
 
 
 class ThreadMessage(Base):
@@ -45,6 +52,51 @@ class ThreadMessage(Base):
     )
 
     note: Mapped["Note"] = relationship("Note", back_populates="thread_messages")
+    attachments: Mapped[list["Attachment"]] = relationship(
+        "Attachment",
+        back_populates="thread_message",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        foreign_keys="Attachment.thread_message_id",
+    )
+
+
+class Attachment(Base):
+    __tablename__ = "attachments"
+    __table_args__ = (
+        CheckConstraint(
+            "(note_id IS NOT NULL AND thread_message_id IS NULL) OR "
+            "(note_id IS NULL AND thread_message_id IS NOT NULL)",
+            name="ck_attachment_owner",
+        ),
+        {"sqlite_autoincrement": True},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    note_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    thread_message_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("thread_messages.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    content_type: Mapped[str] = mapped_column(String(200), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    note: Mapped["Note | None"] = relationship("Note", back_populates="attachments", foreign_keys=[note_id])
+    thread_message: Mapped["ThreadMessage | None"] = relationship(
+        "ThreadMessage", back_populates="attachments", foreign_keys=[thread_message_id]
+    )
+
+    @property
+    def url(self) -> str:
+        return f"/api/files/{self.storage_key}"
 
 
 class AppSetting(Base):

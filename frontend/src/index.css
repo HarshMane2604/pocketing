@@ -1000,6 +1000,345 @@ button:disabled {
 .custom-prose *:first-child { margin-top: 0 !important; }
 .custom-prose *:last-child { margin-bottom: 0 !important; }
 
+/* ─── File Upload Button ─── */
+.file-upload-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.file-upload-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.file-upload-btn.has-files {
+  color: var(--accent);
+  position: relative;
+}
+
+.file-upload-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ─── Selected Files Pills (compact horizontal strip) ─── */
+.selected-files {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 6px 0 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-width: 100%;
+}
+
+.selected-files::-webkit-scrollbar {
+  display: none;
+}
+
+.selected-file-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 8px;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  font-size: 10px;
+  color: var(--text-secondary);
+  animation: fadeIn 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.selected-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 80px;
+}
+
+.selected-file-size {
+  color: var(--text-tertiary);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.selected-file-remove {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-quaternary);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.selected-file-remove:hover {
+  background: var(--danger-muted);
+  color: var(--danger);
+}
+
+/* ─── Drag Over Composer ─── */
+.composer.drag-over {
+  border-top-color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.composer.drag-over::before {
+  content: 'Drop files here';
+  display: block;
+  text-align: center;
+  padding: 6px 0 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  animation: fadeIn 0.15s ease;
+}
+
+/* ─── Attachment Grid ─── */
+.attachment-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.attachment-item {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-secondary);
+  transition: border-color var(--transition-fast);
+}
+
+.attachment-item:hover {
+  border-color: var(--border-primary);
+}
+
+/* Image attachments */
+.attachment-image {
+  max-width: 240px;
+  cursor: pointer;
+}
+
+.attachment-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 7px;
+  transition: transform var(--transition-normal);
+}
+
+.attachment-image:hover img {
+  transform: scale(1.02);
+}
+
+/* Video attachments */
+.attachment-video {
+  max-width: 300px;
+}
+
+.attachment-video video {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  border-radius: 7px;
+}
+
+/* Audio attachments */
+.attachment-audio {
+  width: 100%;
+  max-width: 300px;
+  padding: 8px;
+  background: var(--bg-tertiary);
+}
+
+.attachment-audio audio {
+  width: 100%;
+  height: 32px;
+}
+
+/* Overlay for image/video (name + actions on hover) */
+.attachment-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.attachment-item:hover .attachment-overlay {
+  opacity: 1;
+}
+
+.attachment-name {
+  font-size: 10px;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.attachment-actions-mini {
+  display: flex;
+  gap: 4px;
+}
+
+.att-action-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: #fff;
+  text-decoration: none;
+  transition: background var(--transition-fast);
+}
+
+.att-action-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.att-action-btn.att-delete:hover {
+  background: rgba(229, 77, 46, 0.4);
+}
+
+/* File card (non-previewable) */
+.attachment-file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  width: 100%;
+  max-width: 300px;
+}
+
+.file-card-icon {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.file-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-card-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-card-size {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.file-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.file-card-actions .att-action-btn {
+  color: var(--text-quaternary);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.file-card-actions .att-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.file-card-actions .att-action-btn.att-delete:hover {
+  background: var(--danger-muted);
+  color: var(--danger);
+}
+
+/* ─── Lightbox ─── */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease;
+  cursor: pointer;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+  z-index: 1001;
+}
+
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.lightbox-image {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: default;
+}
+
 /* ─── Responsive ─── */
 @media (min-width: 640px) {
   .app-header {
@@ -1024,5 +1363,433 @@ button:disabled {
 
   .thread-composer {
     padding: 16px 32px;
+  }
+}
+
+/* ─── Header Files Button ─── */
+.header-files-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.header-files-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.header-files-btn.active {
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+/* ─── Files View ─── */
+.files-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  animation: fadeIn 0.15s ease;
+}
+
+.files-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  transition: background var(--transition-theme), border-color var(--transition-theme);
+}
+
+.files-header-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.files-header-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.files-header-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.files-header-count {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+}
+
+/* ─── Files Toolbar ─── */
+.files-toolbar {
+  flex-shrink: 0;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-primary);
+  transition: background var(--transition-theme), border-color var(--transition-theme);
+}
+
+.files-toolbar-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.files-search {
+  margin-bottom: 0;
+}
+
+.files-filters-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ─── Type Filter Chips ─── */
+.files-type-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.files-type-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.files-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.files-chip:hover {
+  border-color: var(--border-primary);
+  background: var(--bg-hover);
+}
+
+.files-chip.active {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+}
+
+/* ─── Custom Dropdown Menu (Radix/shadcn style) ─── */
+.dropdown-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.dropdown-trigger:hover,
+.dropdown-trigger:focus-visible {
+  border-color: var(--border-primary);
+  background: var(--bg-hover);
+}
+
+.dropdown-trigger.open {
+  border-color: var(--border-primary);
+  box-shadow: 0 0 0 1px var(--border-primary);
+}
+
+.dropdown-label {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.dropdown-chevron {
+  color: var(--text-quaternary);
+  transition: transform var(--transition-fast);
+  margin-left: 2px;
+}
+
+.dropdown-trigger.open .dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.dropdown-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  padding: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  box-shadow: 0 10px 38px -10px rgba(0, 0, 0, 0.1), 0 10px 20px -15px rgba(0, 0, 0, 0.05);
+  z-index: 50;
+  animation: fadeIn 0.15s ease-out;
+  transform-origin: top right;
+}
+
+[data-theme="dark"] .dropdown-popover {
+  box-shadow: 0 10px 38px -10px rgba(0, 0, 0, 0.3), 0 10px 20px -15px rgba(0, 0, 0, 0.2);
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 8px 6px 24px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+  position: relative;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: var(--bg-hover);
+}
+
+.dropdown-item.selected {
+  font-weight: 500;
+}
+
+.dropdown-item-check {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-primary);
+}
+
+/* ─── Files Content ─── */
+.files-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 32px;
+}
+
+/* ─── Files Grid ─── */
+.files-grid {
+  max-width: 720px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+/* ─── File Card ─── */
+.files-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-secondary);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  transition: border-color var(--transition-fast), background var(--transition-theme), transform var(--transition-fast), opacity var(--transition-fast);
+  animation: fadeIn 0.2s ease both;
+}
+
+.files-card:hover {
+  border-color: var(--border-primary);
+  transform: translateY(-1px);
+}
+
+.files-card.is-deleting {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Thumbnail */
+.files-card-thumb {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+  transition: background var(--transition-theme);
+}
+
+.files-card-thumb.has-preview {
+  cursor: pointer;
+}
+
+.files-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--transition-normal);
+}
+
+.files-card-thumb:hover img {
+  transform: scale(1.05);
+}
+
+.files-card-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.files-card-icon-wrap {
+  color: var(--text-quaternary);
+  transition: color var(--transition-theme);
+}
+
+/* Body */
+.files-card-body {
+  padding: 10px 12px 6px;
+  min-width: 0;
+}
+
+.files-card-name {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--transition-theme);
+}
+
+.files-card-meta {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  transition: color var(--transition-theme);
+}
+
+.files-card-parent {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-quaternary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+  transition: color var(--transition-theme);
+}
+
+/* Actions */
+.files-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 4px 8px 8px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.files-card:hover .files-card-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .files-card-actions {
+    opacity: 1;
+  }
+}
+
+.files-action-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--text-quaternary);
+  text-decoration: none;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.files-action-btn:hover {
+  background: var(--bg-active);
+  color: var(--text-secondary);
+}
+
+.files-action-btn.danger:hover {
+  background: var(--danger-muted);
+  color: var(--danger);
+}
+
+.files-action-btn:disabled {
+  opacity: 0.4;
+}
+
+/* ─── Files Responsive ─── */
+@media (min-width: 640px) {
+  .files-header {
+    padding: 16px 32px;
+  }
+
+  .files-toolbar {
+    padding: 12px 32px;
+  }
+
+  .files-content {
+    padding: 20px 32px 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .files-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .files-card-thumb {
+    height: 90px;
   }
 }

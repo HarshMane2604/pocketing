@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     telegram_bot_token: str = ""
     telegram_allowed_chat_id: str = ""
+    max_upload_size: int = 50 * 1024 * 1024  # 50 MB
+    upload_dir: str = "data/uploads"
 
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.development"),

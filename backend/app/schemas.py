@@ -38,6 +38,23 @@ class ReorderRequest(BaseModel):
     note_ids: list[int]
 
 
+class AttachmentResponse(BaseModel):
+    id: int
+    filename: str
+    content_type: str
+    size_bytes: int
+    url: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat().replace("+00:00", "Z")
+
+
 class NoteResponse(BaseModel):
     id: int
     content: str
@@ -47,6 +64,7 @@ class NoteResponse(BaseModel):
     source: str
     priority: int
     thread_count: int = 0
+    attachments: list[AttachmentResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -74,6 +92,29 @@ class ThreadMessageResponse(BaseModel):
     note_id: int
     content: str
     created_at: datetime
+    attachments: list[AttachmentResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat().replace("+00:00", "Z")
+
+
+class FileSearchResult(BaseModel):
+    """Attachment with parent context for the files management view."""
+
+    id: int
+    filename: str
+    content_type: str
+    size_bytes: int
+    url: str
+    created_at: datetime
+    parent_type: str  # "note" or "thread"
+    parent_id: int
+    parent_content: str  # truncated snippet
 
     model_config = ConfigDict(from_attributes=True)
 

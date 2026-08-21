@@ -4,13 +4,15 @@ import asyncio
 import logging
 from contextlib import suppress
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.service import create_note, get_setting, set_setting
+from app.models import Attachment
+from app.service import create_note, get_setting, save_file_data, set_setting
 
 logger = logging.getLogger(__name__)
 TELEGRAM_CHAT_SETTING = "telegram_chat_id"
@@ -95,6 +97,24 @@ class TelegramBridge:
                     logger.warning("Telegram polling failed; retrying: %s", self.last_error)
                     await asyncio.sleep(3)
 
+    async def _download_file(self, client: httpx.AsyncClient, file_id: str) -> tuple[bytes, str] | None:
+        """Fetch a file from Telegram using file_id. Returns (data, file_path) or None on error."""
+        try:
+            get_url = f"https://api.telegram.org/bot{self.token}/getFile"
+            resp = await client.get(get_url, params={"file_id": file_id})
+            resp.raise_for_status()
+            result = resp.json()
+            if not result.get("ok"):
+                return None
+            file_path = result["result"]["file_path"]
+            download_url = f"https://api.telegram.org/file/bot{self.token}/{file_path}"
+            file_resp = await client.get(download_url)
+            file_resp.raise_for_status()
+            return file_resp.content, file_path
+        except Exception as err:
+            logger.warning("Telegram file download failed: %s", type(err).__name__)
+            return None
+
     async def capture(self, update: dict[str, Any]) -> None:
         message = update.get("message") or {}
         chat_id = str((message.get("chat") or {}).get("id", ""))
@@ -114,14 +134,73 @@ class TelegramBridge:
 
             content = (message.get("text") or message.get("caption") or "").strip()
             # Commands can pair the chat, but are not stored as notes.
-            if not content or content.startswith("/"):
+            if content.startswith("/"):
                 return
+
+            # ── Detect incoming media ──────────────────────────────────────────
+            # Each entry: (file_id, filename, content_type)
+            media_items: list[tuple[str, str, str]] = []
+
+            if doc := message.get("document"):
+                mime = doc.get("mime_type") or "application/octet-stream"
+                media_items.append((doc["file_id"], doc.get("file_name") or "document", mime))
+
+            elif photos := message.get("photo"):
+                # Telegram sends multiple resolutions; last = largest
+                photo = photos[-1]
+                media_items.append((photo["file_id"], "photo.jpg", "image/jpeg"))
+
+            elif vid := message.get("video"):
+                mime = vid.get("mime_type") or "video/mp4"
+                ext = ".mp4" if "mp4" in mime else ".mkv"
+                media_items.append((vid["file_id"], f"video{ext}", mime))
+
+            elif audio := message.get("audio"):
+                mime = audio.get("mime_type") or "audio/mpeg"
+                fname = audio.get("file_name") or "audio.mp3"
+                media_items.append((audio["file_id"], fname, mime))
+
+            elif voice := message.get("voice"):
+                media_items.append((voice["file_id"], "voice.ogg", "audio/ogg"))
+
+            # Skip if there's nothing at all (no text, no media)
+            if not content and not media_items:
+                return
+
+            # Use a fallback content if only files were sent
+            final_content = content or "📎 Attachment"
+
+            # Download and save each media item, build Attachment objects
+            pre_attachments: list[Attachment] = []
+            if media_items:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(60)) as client:
+                    for file_id, filename, mime in media_items:
+                        result = await self._download_file(client, file_id)
+                        if result is None:
+                            continue
+                        data, _file_path = result
+                        try:
+                            storage_key, content_type, size = save_file_data(filename, mime, data)
+                            att = Attachment(
+                                filename=filename,
+                                storage_key=storage_key,
+                                content_type=content_type,
+                                size_bytes=size,
+                            )
+                            pre_attachments.append(att)
+                        except ValueError as err:
+                            logger.warning("Skipping Telegram file: %s", err)
+
             date_val = message.get("date")
             created_at = (
                 datetime.fromtimestamp(date_val, tz=timezone.utc) if date_val else None
             )
             await create_note(
-                session, content, source="telegram", created_at=created_at
+                session,
+                final_content,
+                source="telegram",
+                created_at=created_at,
+                pre_attachments=pre_attachments or None,
             )
         self.last_message_at = datetime.now(timezone.utc)
 
@@ -150,6 +229,54 @@ class TelegramBridge:
         except Exception as error:
             self.last_error = self.safe_error(error)
             logger.warning("Telegram send failed: %s", self.last_error)
+            return False
+
+    async def send_file(
+        self,
+        file_path: str | Path,
+        filename: str,
+        caption: str | None = None,
+    ) -> bool:
+        """Send a file to the paired Telegram chat using sendDocument.
+
+        Args:
+            file_path: Absolute path to the file on disk.
+            filename: The display filename for Telegram.
+            caption: Optional text caption (max 1024 chars for Telegram).
+        """
+        if not self.token:
+            return False
+        if not self.active_chat_id:
+            return False
+
+        url = f"https://api.telegram.org/bot{self.token}/sendDocument"
+        path = Path(file_path)
+        if not path.is_file():
+            logger.warning("Telegram send_file: file not found: %s", path)
+            return False
+
+        try:
+            # Telegram Bot API: max 50 MB for sendDocument (matches our limit)
+            async with httpx.AsyncClient(timeout=httpx.Timeout(60)) as client:
+                with open(path, "rb") as f:
+                    files_payload = {"document": (filename, f)}
+                    data_payload: dict[str, str] = {"chat_id": self.active_chat_id}
+                    if caption:
+                        data_payload["caption"] = caption[:1024]
+                    response = await client.post(
+                        url,
+                        data=data_payload,
+                        files=files_payload,
+                    )
+                    response.raise_for_status()
+                    if not response.json().get("ok"):
+                        raise RuntimeError("Telegram returned an unsuccessful response")
+            self.last_error = None
+            self.last_sent_at = datetime.now(timezone.utc)
+            return True
+        except Exception as error:
+            self.last_error = self.safe_error(error)
+            logger.warning("Telegram send_file failed: %s", self.last_error)
             return False
 
 

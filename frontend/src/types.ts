@@ -1,3 +1,12 @@
+export interface Attachment {
+  id: number;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  url: string;
+  created_at: string;
+}
+
 export interface Note {
   id: number;
   content: string;
@@ -7,6 +16,7 @@ export interface Note {
   source: 'web' | 'telegram';
   priority: number;
   thread_count: number;
+  attachments: Attachment[];
 }
 
 export interface ThreadMessage {
@@ -14,6 +24,7 @@ export interface ThreadMessage {
   note_id: number;
   content: string;
   created_at: string;
+  attachments: Attachment[];
 }
 
 export type NoteUpdate = Partial<Pick<Note, 'content' | 'is_pinned' | 'is_done' | 'priority'>>;
@@ -37,4 +48,16 @@ export interface TelegramStatus {
 export interface RuntimeStatus {
   status: string;
   telegram: TelegramStatus;
+}
+
+export interface FileSearchResult {
+  id: number;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  url: string;
+  created_at: string;
+  parent_type: 'note' | 'thread';
+  parent_id: number;
+  parent_content: string;
 }

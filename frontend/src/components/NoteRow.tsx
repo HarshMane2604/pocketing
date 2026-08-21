@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 
 import { CheckIcon, CircleIcon, CopyIcon, PinIcon, ThreadIcon, TrashIcon } from '@/components/Icons';
+import { AttachmentPreview } from '@/components/AttachmentPreview';
 import type { Note, NoteUpdate } from '@/types';
 
 function relativeTime(value: string): string {
@@ -136,6 +137,12 @@ export function NoteRow({ note, busy, onUpdate, onDelete, onOpenThread, dragHand
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{displayContent}</ReactMarkdown>
           </div>
         )}
+
+        {/* Attachment previews */}
+        {note.attachments && note.attachments.length > 0 && (
+          <AttachmentPreview attachments={note.attachments} />
+        )}
+
         <div className="note-meta">
           <span>{relativeTime(note.created_at)}</span>
           {note.is_pinned && (

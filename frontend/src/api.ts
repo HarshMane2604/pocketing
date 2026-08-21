@@ -1,4 +1,4 @@
-import type { Note, NoteUpdate, RuntimeStatus, ThreadMessage } from '@/types';
+import type { FileSearchResult, Note, NoteUpdate, RuntimeStatus, ThreadMessage } from '@/types';
 
 const configuredUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
 const apiUrl = configuredUrl ?? '';
@@ -17,13 +17,34 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+/** Like request() but without setting Content-Type (for FormData). */
+async function requestRaw<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${apiUrl}${path}`, options);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || `Request failed (${response.status})`);
+  }
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
+
 export const notesApi = {
   list: () => request<Note[]>('/api/notes'),
   status: () => request<RuntimeStatus>('/api/status'),
-  create: (content: string) => request<Note>('/api/notes', {
-    method: 'POST',
-    body: JSON.stringify({ content }),
-  }),
+  create: (content: string, files?: File[]) => {
+    const form = new FormData();
+    form.append('content', content);
+    if (files) {
+      for (const file of files) {
+        form.append('files', file);
+      }
+    }
+    return requestRaw<Note>('/api/notes', {
+      method: 'POST',
+      body: form,
+    });
+  },
   update: (id: number, update: NoteUpdate) => request<Note>(`/api/notes/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(update),
@@ -37,13 +58,37 @@ export const notesApi = {
 
 export const threadApi = {
   list: (noteId: number) => request<ThreadMessage[]>(`/api/notes/${noteId}/thread`),
-  create: (noteId: number, content: string) => request<ThreadMessage>(`/api/notes/${noteId}/thread`, {
-    method: 'POST',
-    body: JSON.stringify({ content }),
-  }),
+  create: (noteId: number, content: string, files?: File[]) => {
+    const form = new FormData();
+    form.append('content', content);
+    if (files) {
+      for (const file of files) {
+        form.append('files', file);
+      }
+    }
+    return requestRaw<ThreadMessage>(`/api/notes/${noteId}/thread`, {
+      method: 'POST',
+      body: form,
+    });
+  },
   remove: (noteId: number, messageId: number) => request<void>(`/api/notes/${noteId}/thread/${messageId}`, {
     method: 'DELETE',
   }),
+};
+
+export const filesApi = {
+  list: (params?: { search?: string; type?: string; sort?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.search) qs.set('search', params.search);
+    if (params?.type) qs.set('type', params.type);
+    if (params?.sort) qs.set('sort', params.sort);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.offset) qs.set('offset', String(params.offset));
+    const query = qs.toString();
+    return request<FileSearchResult[]>(`/api/files${query ? `?${query}` : ''}`);
+  },
+  delete: (fileId: number) => request<void>(`/api/files/${fileId}`, { method: 'DELETE' }),
+  url: (relativeUrl: string) => `${apiUrl}${relativeUrl}`,
 };
 
 export function websocketUrl(): string {

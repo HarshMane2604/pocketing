@@ -17,11 +17,13 @@ import {
 } from '@dnd-kit/sortable';
 
 import { notesApi, websocketUrl } from '@/api';
-import { CheckIcon, SearchIcon, XIcon } from '@/components/Icons';
+import { CheckIcon, FolderIcon, SearchIcon, XIcon } from '@/components/Icons';
 import { SortableNoteRow } from '@/components/SortableNoteRow';
 import { NoteRow } from '@/components/NoteRow';
 import { ThreadView } from '@/components/ThreadView';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { FileUploadButton } from '@/components/FileUploadButton';
+import { FilesView } from '@/components/FilesView';
 import type { Note, NoteEvent, NoteUpdate, TelegramStatus } from '@/types';
 
 type ConnectionState = 'connecting' | 'connected' | 'offline';
@@ -56,6 +58,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
 export default function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [draft, setDraft] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -64,6 +67,8 @@ export default function App() {
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [telegram, setTelegram] = useState<TelegramStatus | null>(null);
   const [activeThread, setActiveThread] = useState<Note | null>(null);
+  const [showFiles, setShowFiles] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const reconnectTimer = useRef<number | undefined>(undefined);
 
   const sensors = useSensors(
@@ -182,13 +187,15 @@ export default function App() {
   async function addNote(event?: React.SyntheticEvent) {
     event?.preventDefault();
     const content = draft.trim();
-    if (!content || saving) return;
+    if ((!content && files.length === 0) || saving) return;
+    const finalContent = content || '📎 Attachment';
     setSaving(true);
     setError('');
     try {
-      const created = await notesApi.create(content);
+      const created = await notesApi.create(finalContent, files.length > 0 ? files : undefined);
       upsert(created);
       setDraft('');
+      setFiles([]);
       notesApi.status()
         .then((status) => setTelegram(status.telegram))
         .catch(() => undefined);
@@ -244,6 +251,43 @@ export default function App() {
     );
   }, []);
 
+  // Drag-and-drop file handling on the composer
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      setDragOver(true);
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  }
+
+  function handleDragOverEvent(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const maxSize = 50 * 1024 * 1024;
+      const newFiles = Array.from(e.dataTransfer.files).filter((f) => {
+        if (f.size > maxSize) {
+          alert(`"${f.name}" is too large (max 50 MB)`);
+          return false;
+        }
+        return f.size > 0;
+      });
+      setFiles((prev) => [...prev, ...newFiles]);
+    }
+  }
+
   const renderSortableList = (list: Note[], title: string) => {
     if (list.length === 0) return null;
     return (
@@ -290,6 +334,15 @@ export default function App() {
           </div>
 
           <div className="header-right">
+            <button
+              type="button"
+              onClick={() => { setShowFiles(true); setActiveThread(null); }}
+              className={`header-files-btn${showFiles ? ' active' : ''}`}
+              title="Browse files"
+              aria-label="Browse files"
+            >
+              <FolderIcon size={14} />
+            </button>
             <div
               title={connection === 'connected' ? 'Live updates connected' : 'Reconnecting…'}
               className={`live-indicator ${connection === 'connected' ? 'connected' : 'offline'}`}
@@ -303,7 +356,17 @@ export default function App() {
       </header>
 
       {/* ── Content ── */}
-      {activeThread ? (
+      {showFiles ? (
+        <FilesView
+          onBack={() => setShowFiles(false)}
+          onGoToNote={(noteId) => {
+            setShowFiles(false);
+            // Find the note and open its thread, or just scroll to it
+            const target = notes.find((n) => n.id === noteId);
+            if (target) setActiveThread(target);
+          }}
+        />
+      ) : activeThread ? (
         <ThreadView
           note={activeThread}
           onBack={() => setActiveThread(null)}
@@ -374,9 +437,16 @@ export default function App() {
       )}
 
       {/* ── Composer ── */}
-      {!activeThread && <div className="composer">
+      {!activeThread && !showFiles && <div
+        className={`composer${dragOver ? ' drag-over' : ''}`}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOverEvent}
+        onDrop={handleDrop}
+      >
         <div className="composer-inner">
           <form onSubmit={(event) => void addNote(event)} className="composer-row">
+            <FileUploadButton files={files} onChange={setFiles} />
             <textarea
               autoFocus
               value={draft}
@@ -396,7 +466,7 @@ export default function App() {
             />
             <button
               type="submit"
-              disabled={!draft.trim() || saving}
+              disabled={(!draft.trim() && files.length === 0) || saving}
               aria-label="Send"
               title="Save and send to Telegram"
               className="composer-send"

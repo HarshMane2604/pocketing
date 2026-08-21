@@ -39,7 +39,8 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 async def initialize_database() -> None:
     # The default SQLite URL points here. Creating it is harmless for custom URLs.
     Path("data").mkdir(exist_ok=True)
-    from app.models import AppSetting, Note, ThreadMessage  # noqa: F401
+    Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+    from app.models import AppSetting, Attachment, Note, ThreadMessage  # noqa: F401
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)

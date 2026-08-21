@@ -5,6 +5,8 @@ import remarkBreaks from 'remark-breaks';
 
 import { threadApi } from '@/api';
 import { ArrowLeftIcon, CheckIcon, CopyIcon, TrashIcon } from '@/components/Icons';
+import { AttachmentPreview } from '@/components/AttachmentPreview';
+import { FileUploadButton } from '@/components/FileUploadButton';
 import type { Note, ThreadMessage } from '@/types';
 
 function relativeTime(value: string): string {
@@ -26,6 +28,7 @@ interface ThreadViewProps {
 export function ThreadView({ note, onBack, onThreadCountChange }: ThreadViewProps) {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [draft, setDraft] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -71,13 +74,16 @@ export function ThreadView({ note, onBack, onThreadCountChange }: ThreadViewProp
   async function addMessage(event?: React.SyntheticEvent) {
     event?.preventDefault();
     const content = draft.trim();
-    if (!content || sending) return;
+    if ((!content && files.length === 0) || sending) return;
+    // If there are files but no text, use a default placeholder
+    const finalContent = content || '📎 Attachment';
     setSending(true);
     setError('');
     try {
-      const created = await threadApi.create(note.id, content);
+      const created = await threadApi.create(note.id, finalContent, files.length > 0 ? files : undefined);
       setMessages((current) => [...current, created]);
       setDraft('');
+      setFiles([]);
       onThreadCountChange(note.id, messages.length + 1);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not add message');
@@ -141,6 +147,10 @@ export function ThreadView({ note, onBack, onThreadCountChange }: ThreadViewProp
                 <div className="thread-message-content prose prose-sm dark:prose-invert break-words max-w-none custom-prose">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>
                 </div>
+                {/* Thread message attachments */}
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <AttachmentPreview attachments={msg.attachments} />
+                )}
                 <span className="thread-message-time">{relativeTime(msg.created_at)}</span>
               </div>
               <div className="thread-message-actions">
@@ -171,6 +181,7 @@ export function ThreadView({ note, onBack, onThreadCountChange }: ThreadViewProp
       {/* Composer */}
       <div className="thread-composer">
         <form onSubmit={(event) => void addMessage(event)} className="composer-row">
+          <FileUploadButton files={files} onChange={setFiles} />
           <textarea
             autoFocus
             value={draft}
@@ -190,7 +201,7 @@ export function ThreadView({ note, onBack, onThreadCountChange }: ThreadViewProp
           />
           <button
             type="submit"
-            disabled={!draft.trim() || sending}
+            disabled={(!draft.trim() && files.length === 0) || sending}
             aria-label="Send"
             className="composer-send"
           >
