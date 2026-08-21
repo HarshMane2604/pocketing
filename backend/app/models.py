@@ -14,6 +14,7 @@ class Note(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    structured_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -23,6 +24,8 @@ class Note(Base):
     is_done: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     source: Mapped[str] = mapped_column(String(20), default="web", nullable=False)
     priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    telegram_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     thread_messages: Mapped[list["ThreadMessage"]] = relationship(
         "ThreadMessage", back_populates="note", cascade="all, delete-orphan", passive_deletes=True
@@ -45,6 +48,7 @@ class ThreadMessage(Base):
         Integer, ForeignKey("notes.id", ondelete="CASCADE"), nullable=False, index=True
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    structured_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

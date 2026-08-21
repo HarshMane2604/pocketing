@@ -10,6 +10,9 @@
   --bg-hover: #f0efee;
   --bg-active: #eaeae8;
   --bg-input: #ffffff;
+  --surface-chat: #fafafa;
+  --surface-chat-outgoing: #ffffff;
+  --surface-editor: #ffffff;
 
   --text-primary: #1a1a1a;
   --text-secondary: #6b6b6b;
@@ -20,6 +23,8 @@
   --border-primary: #e8e8e6;
   --border-secondary: #f0f0ee;
   --border-focus: #1a1a1a;
+  --editor-focus-border: #efb27f;
+  --editor-focus-ring: rgba(234, 88, 12, 0.11);
 
   --accent: #1a1a1a;
   --accent-secondary: #6b6b6b;
@@ -59,16 +64,21 @@
   --bg-hover: #222220;
   --bg-active: #2a2a28;
   --bg-input: #171716;
+  --surface-chat: #242421;
+  --surface-chat-outgoing: #2a2a26;
+  --surface-editor: #282824;
 
   --text-primary: #ededec;
-  --text-secondary: #8a8a88;
-  --text-tertiary: #555553;
-  --text-quaternary: #3a3a38;
+  --text-secondary: #a4a49f;
+  --text-tertiary: #777770;
+  --text-quaternary: #72726c;
   --text-inverse: #111110;
 
   --border-primary: #2a2a28;
   --border-secondary: #222220;
   --border-focus: #ededec;
+  --editor-focus-border: #9a633c;
+  --editor-focus-ring: rgba(249, 115, 22, 0.12);
 
   --accent: #ededec;
   --accent-secondary: #8a8a88;
@@ -308,9 +318,9 @@ button:disabled {
 .search-bar input {
   width: 100%;
   padding: 7px 32px 7px 32px;
-  border: 1px solid var(--border-secondary);
+  border: 1px solid var(--border-primary);
   border-radius: var(--radius);
-  background: var(--bg-secondary);
+  background: var(--surface-editor);
   font-size: 13px;
   color: var(--text-primary);
   outline: none;
@@ -323,7 +333,7 @@ button:disabled {
 
 .search-bar input:focus {
   border-color: var(--border-primary);
-  background: var(--bg-primary);
+  background: var(--surface-chat-outgoing);
 }
 
 .search-bar .search-clear {
@@ -422,13 +432,13 @@ button:disabled {
 
 /* Telegram (left side, pointing upward-left) */
 .note-row.source-telegram .note-bubble {
-  background: var(--bg-secondary);
+  background: var(--surface-chat);
   border-top-left-radius: 2px;
 }
 
 /* Web (right side, pointing upward-right) */
 .note-row.source-web .note-bubble {
-  background: var(--bg-primary);
+  background: var(--surface-chat-outgoing);
   border-top-right-radius: 2px;
 }
 
@@ -646,35 +656,606 @@ button:disabled {
   margin: 0 auto;
 }
 
-.composer-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.composer-form {
+  width: 100%;
 }
 
-.composer-input {
-  flex: 1;
+/* ─── Rich Text Editor ─── */
+.rich-editor {
+  position: relative;
+  width: 100%;
   min-width: 0;
-  padding: 9px 12px;
   border: 1px solid var(--border-primary);
   border-radius: var(--radius);
-  background: var(--bg-input);
+  background: var(--surface-editor);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast), background var(--transition-theme), box-shadow var(--transition-fast);
+  --editor-control-size: 29px;
+}
+
+.rich-editor:focus-within {
+  border-color: var(--editor-focus-border);
+  box-shadow: 0 0 0 3px var(--editor-focus-ring);
+}
+
+.rich-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 38px;
+  padding: 4px 7px;
+  border-bottom: 1px solid var(--border-secondary);
+  color: var(--text-secondary);
+  overflow-x: auto;
+  scrollbar-width: none;
+  animation: fadeIn 100ms ease;
+}
+
+.rich-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.rich-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.rich-toolbar-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: var(--text-secondary);
   font-size: 14px;
+  line-height: 1;
+  transition: color var(--transition-fast), background var(--transition-fast);
+  border: 0;
+  background: transparent;
+}
+
+.rich-toolbar-btn:hover:not(:disabled),
+.rich-toolbar-btn.is-active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.rich-toolbar-btn.is-active {
+  box-shadow: inset 0 0 0 1px var(--border-primary);
+}
+
+.rich-toolbar-btn:disabled {
+  opacity: 0.3;
+}
+
+.rich-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  flex-shrink: 0;
+  background: var(--border-primary);
+}
+
+.rich-toolbar-select {
+  height: 28px;
+  min-width: 54px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 6px;
+  outline: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.rich-toolbar-select:hover,
+.rich-toolbar-select:focus {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.toolbar-code {
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.align-icon {
+  width: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.align-icon i {
+  width: 14px;
+  height: 1px;
+  display: block;
+  background: currentColor;
+}
+
+.align-icon i:nth-child(2) {
+  width: 9px;
+}
+
+.align-center i:nth-child(2) {
+  align-self: center;
+}
+
+.align-right i:nth-child(2) {
+  align-self: flex-end;
+}
+
+.rich-editor-surface {
+  position: relative;
+  min-width: 0;
+}
+
+.rich-editor .tiptap {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  max-height: min(45vh, 360px);
+  overflow-y: auto;
+  padding: 9px 76px 9px 12px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
   outline: none;
-  transition: border-color var(--transition-fast), background var(--transition-theme), color var(--transition-theme);
 }
 
-.composer-input::placeholder {
+.rich-editor .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
   color: var(--text-quaternary);
+  pointer-events: none;
 }
 
-.composer-input:focus {
+.rich-editor .tiptap p,
+.rich-editor .tiptap h1,
+.rich-editor .tiptap h2,
+.rich-editor .tiptap h3 {
+  margin: 0;
+}
+
+.rich-editor .tiptap h1 {
+  font-size: 1.45em;
+  line-height: 1.25;
+}
+
+.rich-editor .tiptap h2 {
+  font-size: 1.25em;
+  line-height: 1.3;
+}
+
+.rich-editor .tiptap h3 {
+  font-size: 1.08em;
+  line-height: 1.35;
+}
+
+.rich-editor .tiptap strong,
+.rich-editor .tiptap b {
+  font-weight: 700;
+}
+
+.rich-editor .tiptap em,
+.rich-editor .tiptap i {
+  font-style: italic;
+}
+
+.rich-editor .tiptap s,
+.rich-editor .tiptap strike {
+  text-decoration: line-through;
+}
+
+.rich-editor .tiptap ul,
+.rich-editor .tiptap ol {
+  margin: 2px 0;
+  padding-inline-start: 30px;
+  list-style-position: outside;
+}
+
+.rich-editor .tiptap ul:not([data-type='taskList']) {
+  list-style-type: disc;
+}
+
+.rich-editor .tiptap ol {
+  list-style-type: decimal;
+}
+
+.rich-editor .tiptap li::marker,
+.rich-text-display li::marker {
+  color: var(--text-secondary);
+}
+
+.rich-editor .tiptap li {
+  padding-left: 2px;
+}
+
+.rich-editor .tiptap li > p {
+  display: inline;
+}
+
+.rich-editor .tiptap ul[data-type='taskList'] {
+  padding-left: 2px;
+  list-style: none;
+}
+
+.rich-editor .tiptap ul[data-type='taskList'] > li,
+.rich-editor .tiptap li[data-checked] {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.rich-editor .tiptap ul[data-type='taskList'] > li > label,
+.rich-editor .tiptap li[data-checked] > label {
+  padding-top: 1px;
+  user-select: none;
+}
+
+.rich-editor .tiptap ul[data-type='taskList'] > li > div,
+.rich-editor .tiptap li[data-checked] > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.rich-editor .tiptap li[data-checked] > label span,
+.rich-text-display li[data-checked] > label span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.rich-text-display ul[data-type='taskList'] {
+  padding-left: 0 !important;
+  list-style: none;
+}
+
+.rich-text-display li[data-checked] {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.rich-text-display li[data-checked] > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.rich-text-display li[data-checked] input {
+  pointer-events: none;
+}
+
+.rich-editor .tiptap blockquote {
+  margin: 2px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--border-focus);
+  color: var(--text-secondary);
+}
+
+.rich-editor .tiptap code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.rich-editor .tiptap pre {
+  margin: 2px 0;
+  padding: 8px 10px;
+  border-radius: 5px;
+  background: var(--bg-tertiary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.rich-editor .tiptap pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.rich-editor .tiptap a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-editor .tiptap hr {
+  margin: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--border-primary);
+}
+
+.rich-editor-inline-actions {
+  position: absolute;
+  z-index: 3;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.editor-mode-btn {
+  width: 29px;
+  height: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.editor-mode-btn + .editor-mode-btn,
+.editor-emoji-btn {
+  text-decoration: none;
+}
+
+.editor-mode-btn:hover,
+.editor-mode-btn.is-active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.rich-editor-footer {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 6px 5px 7px;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.editor-footer-start {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.editor-shortcut {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.rich-editor:not(.has-toolbar).has-footer .tiptap {
+  min-height: 40px;
+  max-height: min(45vh, 360px);
+  overflow-y: auto;
+  padding-left: 45px;
+  padding-right: 139px;
+}
+
+.rich-editor:not(.has-toolbar).has-footer .rich-editor-inline-actions {
+  right: 65px;
+}
+
+.rich-editor:not(.has-toolbar) .rich-editor-footer {
+  position: absolute;
+  inset: 0;
+  min-height: 40px;
+  padding: 2px 4px;
+  border-top: 0;
+  pointer-events: none;
+}
+
+.rich-editor:not(.has-toolbar) .editor-footer-start {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  pointer-events: auto;
+}
+
+.rich-editor:not(.has-toolbar) .editor-shortcut {
+  display: none;
+}
+
+.rich-editor:not(.has-toolbar) .composer-send {
+  position: absolute;
+  right: 3px;
+  top: 2px;
+  pointer-events: auto;
+}
+
+.rich-editor:not(.has-toolbar) .selected-files {
+  position: absolute;
+  left: 0;
+  bottom: 45px;
+  max-width: min(360px, calc(100vw - 40px));
+  padding: 5px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.rich-editor.has-toolbar .tiptap {
+  min-height: 82px;
+  padding: 11px 76px 11px 13px;
+}
+
+.rich-editor--inline:not(.has-toolbar) .tiptap {
+  padding-left: 12px;
+  padding-right: 76px;
+}
+
+.rich-editor--inline.has-toolbar .tiptap {
+  min-height: 88px;
+  max-height: 300px;
+}
+
+.rich-bubble-menu {
+  display: flex;
+  gap: 1px;
+  padding: 4px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.slash-menu,
+.link-popover,
+.rich-emoji-picker {
+  position: absolute;
+  z-index: 50;
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+}
+
+.slash-menu {
+  width: min(250px, calc(100% - 16px));
+  max-height: 286px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.slash-command {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px;
+  border-radius: 7px;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: left;
+}
+
+.slash-command:hover,
+.slash-command.is-selected {
+  background: var(--bg-active);
+}
+
+.slash-command-icon {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.slash-empty {
+  padding: 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.link-popover {
+  right: 7px;
+  top: 42px;
+  width: min(320px, calc(100% - 14px));
+  padding: 10px;
+}
+
+.link-popover label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.link-popover-row {
+  display: flex;
+  gap: 6px;
+}
+
+.link-popover input {
+  min-width: 0;
+  flex: 1;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.link-popover input:focus {
   border-color: var(--border-focus);
 }
 
+.link-popover button {
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 12px;
+}
+
+.link-error {
+  display: block;
+  margin-top: 5px;
+  color: var(--danger);
+  font-size: 10px;
+}
+
+.rich-emoji-picker {
+  right: 6px;
+  bottom: calc(100% + 7px);
+  width: min(340px, calc(100vw - 28px));
+  overflow: hidden;
+}
+
+.rich-emoji-picker .EmojiPickerReact {
+  --epr-bg-color: var(--bg-primary);
+  --epr-category-label-bg-color: var(--bg-primary);
+  --epr-text-color: var(--text-primary);
+  --epr-search-input-bg-color: var(--bg-input);
+  --epr-search-border-color: var(--border-primary);
+  --epr-hover-bg-color: var(--bg-hover);
+  --epr-focus-bg-color: var(--bg-active);
+  border: 0;
+}
+
+.emoji-picker-loading {
+  height: 180px;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
 .composer-send {
+  width: 36px;
   height: 36px;
-  padding: 0 14px;
+  flex: 0 0 36px;
+  padding: 0;
   border-radius: var(--radius);
   background: var(--accent);
   color: var(--text-inverse);
@@ -685,6 +1266,10 @@ button:disabled {
   justify-content: center;
   gap: 6px;
   transition: opacity var(--transition-fast), background var(--transition-theme), color var(--transition-theme);
+}
+
+.composer-send svg {
+  display: block;
 }
 
 .composer-send:hover:not(:disabled) {
@@ -882,7 +1467,7 @@ button:disabled {
   padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid var(--border-secondary);
-  background: var(--bg-secondary);
+  background: var(--surface-chat);
   border-top-left-radius: 2px;
   transition: border-color var(--transition-theme), background var(--transition-theme);
 }
@@ -984,13 +1569,29 @@ button:disabled {
   padding: 0.15em 0.3em;
   border-radius: 4px;
 }
+.custom-prose code::before,
+.custom-prose code::after {
+  content: none !important;
+}
+.custom-prose a {
+  color: var(--accent) !important;
+  text-decoration-color: currentColor;
+}
 .custom-prose pre code {
   background-color: transparent;
   padding: 0;
 }
 .custom-prose ul, .custom-prose ol { 
   margin-top: 0.25em !important; 
-  margin-bottom: 0.25em !important; 
+  margin-bottom: 0.25em !important;
+  padding-inline-start: 1.8rem !important;
+  list-style-position: outside !important;
+}
+.custom-prose ul:not([data-type='taskList']) {
+  list-style-type: disc !important;
+}
+.custom-prose ol {
+  list-style-type: decimal !important;
 }
 .custom-prose li { 
   margin-top: 0 !important; 
@@ -1791,5 +2392,68 @@ button:disabled {
 
   .files-card-thumb {
     height: 90px;
+  }
+}
+
+/* Keep the composer intentionally quiet on phone-sized screens. */
+@media (max-width: 390px) {
+  .rich-editor-inline-actions,
+  .rich-toolbar,
+  .rich-emoji-picker {
+    display: none;
+  }
+
+  .rich-editor .tiptap p.is-editor-empty:first-child::before {
+    display: none;
+  }
+
+  .rich-editor.has-toolbar .tiptap {
+    min-height: 42px;
+    padding: 9px 12px;
+  }
+
+  .rich-editor:not(.has-toolbar).has-footer .tiptap,
+  .rich-editor.has-toolbar.has-footer .tiptap {
+    min-height: 40px;
+    padding: 9px 48px 9px 45px;
+  }
+
+  .rich-editor.has-toolbar .rich-editor-footer {
+    position: absolute;
+    inset: 0;
+    min-height: 40px;
+    padding: 2px 4px;
+    border-top: 0;
+    pointer-events: none;
+  }
+
+  .rich-editor.has-toolbar .editor-footer-start {
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    pointer-events: auto;
+  }
+
+  .rich-editor.has-toolbar .editor-shortcut {
+    display: none;
+  }
+
+  .rich-editor.has-toolbar .composer-send {
+    position: absolute;
+    right: 3px;
+    top: 2px;
+    pointer-events: auto;
+  }
+
+  .rich-editor.has-toolbar .selected-files {
+    position: absolute;
+    left: 0;
+    bottom: 45px;
+    max-width: calc(100vw - 40px);
+    padding: 5px;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius);
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-sm);
   }
 }

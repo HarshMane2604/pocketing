@@ -1,7 +1,8 @@
 """Shared note operations for browser and messaging bridges."""
 
+import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -15,6 +16,24 @@ from app.realtime import connections
 from app.schemas import AttachmentResponse, NoteResponse, ThreadMessageResponse
 
 settings = get_settings()
+NOTE_EDIT_WINDOW_MINUTES = 15
+NOTE_EDIT_WINDOW = timedelta(minutes=NOTE_EDIT_WINDOW_MINUTES)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def note_editable_until(note: Note) -> datetime:
+    return _as_utc(note.created_at) + NOTE_EDIT_WINDOW
+
+
+def note_can_edit(note: Note, now: datetime | None = None) -> bool:
+    """Only recent web-created notes can be edited from Pocketing."""
+    current = _as_utc(now or datetime.now(timezone.utc))
+    return note.source == "web" and current < note_editable_until(note)
 
 
 def _upload_path() -> Path:
@@ -36,6 +55,11 @@ def serialize_attachment(att: Attachment) -> dict[str, object]:
 def serialize_note(note: Note, thread_count: int = 0) -> dict[str, object]:
     data = NoteResponse.model_validate(note).model_dump(mode="json")
     data["thread_count"] = thread_count
+    data["can_edit"] = note_can_edit(note)
+    data["editable_until"] = note_editable_until(note).isoformat().replace("+00:00", "Z")
+    data["telegram_sync_available"] = bool(
+        note.telegram_chat_id and note.telegram_message_id is not None
+    )
     # Include attachments if loaded
     if hasattr(note, "attachments") and note.attachments is not None:
         data["attachments"] = [serialize_attachment(a) for a in note.attachments]
@@ -167,13 +191,23 @@ async def create_note(
     created_at: datetime | None = None,
     files: list[UploadFile] | None = None,
     pre_attachments: list[Attachment] | None = None,
+    structured_content: dict[str, object] | None = None,
+    telegram_chat_id: str | None = None,
+    telegram_message_id: int | None = None,
 ) -> Note:
     # WhatsApp Cloud API can be added as a webhook that validates Meta's
     # signature, extracts message text, and calls this same function.
     kwargs = {}
     if created_at is not None:
         kwargs["created_at"] = created_at
-    note = Note(content=content.strip(), source=source, **kwargs)
+    note = Note(
+        content=content.strip(),
+        source=source,
+        structured_content=(json.dumps(structured_content, ensure_ascii=False) if structured_content else None),
+        telegram_chat_id=telegram_chat_id,
+        telegram_message_id=telegram_message_id,
+        **kwargs,
+    )
     session.add(note)
     await session.flush()
     await session.refresh(note)
@@ -200,8 +234,13 @@ async def create_thread_message(
     note: Note,
     content: str,
     files: list[UploadFile] | None = None,
+    structured_content: dict[str, object] | None = None,
 ) -> ThreadMessage:
-    message = ThreadMessage(note_id=note.id, content=content.strip())
+    message = ThreadMessage(
+        note_id=note.id,
+        content=content.strip(),
+        structured_content=(json.dumps(structured_content, ensure_ascii=False) if structured_content else None),
+    )
     session.add(message)
     await session.flush()
     await session.refresh(message)

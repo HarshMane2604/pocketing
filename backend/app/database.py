@@ -62,3 +62,22 @@ async def initialize_database() -> None:
                     "NOT NULL DEFAULT 0"
                 )
             )
+        if "structured_content" not in column_names:
+            await connection.execute(
+                text("ALTER TABLE notes ADD COLUMN structured_content TEXT")
+            )
+        if "telegram_chat_id" not in column_names:
+            await connection.execute(
+                text("ALTER TABLE notes ADD COLUMN telegram_chat_id VARCHAR(100)")
+            )
+        if "telegram_message_id" not in column_names:
+            await connection.execute(
+                text("ALTER TABLE notes ADD COLUMN telegram_message_id INTEGER")
+            )
+
+        thread_columns = await connection.execute(text("PRAGMA table_info(thread_messages)"))
+        thread_column_names = {row[1] for row in thread_columns}
+        if "structured_content" not in thread_column_names:
+            await connection.execute(
+                text("ALTER TABLE thread_messages ADD COLUMN structured_content TEXT")
+            )

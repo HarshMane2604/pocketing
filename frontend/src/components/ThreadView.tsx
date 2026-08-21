@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import type { JSONContent } from '@tiptap/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 
 import { threadApi } from '@/api';
-import { ArrowLeftIcon, CheckIcon, CopyIcon, TrashIcon } from '@/components/Icons';
+import { ArrowLeftIcon, CheckIcon, CopyIcon, SendIcon, TrashIcon } from '@/components/Icons';
 import { AttachmentPreview } from '@/components/AttachmentPreview';
 import { FileUploadButton } from '@/components/FileUploadButton';
+import { RichTextDisplay } from '@/components/RichTextDisplay';
+import { RichTextEditor, type RichTextChange } from '@/components/RichTextEditor';
 import type { Note, ThreadMessage } from '@/types';
 
 function relativeTime(value: string): string {
@@ -28,6 +31,7 @@ interface ThreadViewProps {
 export function ThreadView({ note, onBack, onThreadCountChange }: ThreadViewProps) {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [draft, setDraft] = useState('');
+  const [draftDocument, setDraftDocument] = useState<JSONContent | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -71,18 +75,27 @@ export function ThreadView({ note, onBack, onThreadCountChange }: ThreadViewProp
     }
   }
 
-  async function addMessage(event?: React.SyntheticEvent) {
+  async function addMessage(event?: React.SyntheticEvent, editorValue?: RichTextChange) {
     event?.preventDefault();
-    const content = draft.trim();
+    const rawText = (editorValue?.plainText ?? draft).trim();
+    const hasRichContent = editorValue ? !editorValue.isEmpty : Boolean(rawText);
+    const content = rawText || (hasRichContent ? 'Rich note' : '');
+    const document = hasRichContent ? (editorValue?.document ?? draftDocument) : null;
     if ((!content && files.length === 0) || sending) return;
     // If there are files but no text, use a default placeholder
     const finalContent = content || '📎 Attachment';
     setSending(true);
     setError('');
     try {
-      const created = await threadApi.create(note.id, finalContent, files.length > 0 ? files : undefined);
+      const created = await threadApi.create(
+        note.id,
+        finalContent,
+        files.length > 0 ? files : undefined,
+        document,
+      );
       setMessages((current) => [...current, created]);
       setDraft('');
+      setDraftDocument(null);
       setFiles([]);
       onThreadCountChange(note.id, messages.length + 1);
     } catch (reason) {
@@ -145,7 +158,9 @@ export function ThreadView({ note, onBack, onThreadCountChange }: ThreadViewProp
             <div key={msg.id} className="thread-message">
               <div className="thread-message-bubble">
                 <div className="thread-message-content prose prose-sm dark:prose-invert break-words max-w-none custom-prose">
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>
+                  {msg.structured_content
+                    ? <RichTextDisplay content={msg.structured_content} />
+                    : <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{msg.content}</ReactMarkdown>}
                 </div>
                 {/* Thread message attachments */}
                 {msg.attachments && msg.attachments.length > 0 && (
@@ -180,33 +195,37 @@ export function ThreadView({ note, onBack, onThreadCountChange }: ThreadViewProp
 
       {/* Composer */}
       <div className="thread-composer">
-        <form onSubmit={(event) => void addMessage(event)} className="composer-row">
-          <FileUploadButton files={files} onChange={setFiles} />
-          <textarea
+        <form onSubmit={(event) => void addMessage(event)} className="composer-form">
+          <RichTextEditor
             autoFocus
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                void addMessage();
-              }
+            document={draftDocument}
+            plainText={draft}
+            onChange={({ document, plainText, isEmpty }: RichTextChange) => {
+              setDraftDocument(document);
+              setDraft(isEmpty ? '' : (plainText || 'Rich note'));
             }}
-            placeholder="Add to thread…"
+            onSubmit={(value) => void addMessage(undefined, value)}
+            placeholder="Write a note, idea, task, or anything worth keeping…"
             maxLength={4000}
-            aria-label="New thread message"
-            className="composer-input"
-            rows={1}
-            style={{ resize: 'none' }}
+            ariaLabel="New thread message"
+            footer={
+              <>
+                <div className="editor-footer-start">
+                  <FileUploadButton files={files} onChange={setFiles} />
+                  <span className="editor-shortcut">Ctrl+Enter to send</span>
+                </div>
+                <button
+                  type="submit"
+                  disabled={(!draft.trim() && files.length === 0) || sending}
+                  aria-label={sending ? 'Sending message' : 'Send message'}
+                  title="Send message"
+                  className="composer-send"
+                >
+                  {sending ? <span className="spin">↻</span> : <SendIcon size={17} />}
+                </button>
+              </>
+            }
           />
-          <button
-            type="submit"
-            disabled={(!draft.trim() && files.length === 0) || sending}
-            aria-label="Send"
-            className="composer-send"
-          >
-            {sending ? <span className="spin">↻</span> : 'Send'}
-          </button>
         </form>
       </div>
     </div>

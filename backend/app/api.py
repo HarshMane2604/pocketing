@@ -1,6 +1,7 @@
 """HTTP and WebSocket routes."""
 
 from dataclasses import field
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect
@@ -13,11 +14,13 @@ from app.config import get_settings
 from app.database import get_session
 from app.models import Attachment, Note, ThreadMessage
 from app.realtime import connections
+from app.rich_text import rich_text_to_plain_text
 from app.schemas import (
     NoteResponse,
     NoteUpdate,
     ReorderRequest,
     ThreadMessageResponse,
+    validate_structured_content,
 )
 from app.service import (
     cleanup_attachment_files,
@@ -26,6 +29,7 @@ from app.service import (
     delete_upload_file,
     get_thread_count,
     get_thread_counts,
+    note_can_edit,
     serialize_note,
     serialize_thread_message,
 )
@@ -76,6 +80,7 @@ async def list_notes(
 @router.post("/notes", response_model=NoteResponse, status_code=201)
 async def add_note(
     content: str = Form(...),
+    structured_content: str | None = Form(default=None),
     files: list[UploadFile] = File(default=[]),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
@@ -85,10 +90,36 @@ async def add_note(
     if len(content) > 4000:
         raise HTTPException(status_code=422, detail="Note too long (max 4000 chars)")
 
-    note = await create_note(session, content, files=files if files else None)
+    document = None
+    if structured_content:
+        try:
+            parsed = json.loads(structured_content)
+            document = validate_structured_content(parsed)
+        except (TypeError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+    if document:
+        content = rich_text_to_plain_text(document) or content
+        if len(content) > 4000:
+            raise HTTPException(status_code=422, detail="Note too long (max 4000 chars)")
 
-    # Send text to Telegram
-    await telegram_bridge.send_message(note.content)
+    note = await create_note(
+        session,
+        content,
+        files=files if files else None,
+        structured_content=document,
+    )
+
+    # Send text to Telegram and retain the reference required for later edits.
+    telegram_message = await telegram_bridge.send_message(note.content)
+    if telegram_message is not None:
+        note.telegram_chat_id = telegram_message.chat_id
+        note.telegram_message_id = telegram_message.message_id
+        await session.commit()
+        await session.refresh(note, attribute_names=["attachments"])
+        await connections.broadcast({
+            "type": "note.updated",
+            "note": serialize_note(note, 0),
+        })
 
     # Send each file to Telegram
     if note.attachments:
@@ -133,8 +164,58 @@ async def update_note(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     note = await get_note_or_404(note_id, session)
-    for field, value in note_in.model_dump(exclude_unset=True).items():
-        setattr(note, field, value)
+    update_data = note_in.model_dump(exclude_unset=True)
+    content_edit_requested = (
+        "content" in update_data or "structured_content" in update_data
+    )
+    if content_edit_requested and note.source != "web":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Messages received from Telegram cannot be edited in Pocketing "
+                "because the bot did not author the original Telegram message"
+            ),
+        )
+    if content_edit_requested and not note_can_edit(note):
+        raise HTTPException(
+            status_code=403,
+            detail="This note can no longer be edited; the 15-minute edit window has expired",
+        )
+
+    document_update = update_data.get("structured_content")
+    if document_update:
+        rendered_content = rich_text_to_plain_text(document_update)
+        if rendered_content:
+            update_data["content"] = rendered_content
+
+    next_content = str(update_data.get("content", note.content))
+    telegram_reference_available = bool(
+        note.telegram_chat_id and note.telegram_message_id is not None
+    )
+    if (
+        content_edit_requested
+        and telegram_reference_available
+        and next_content != note.content
+    ):
+        telegram_updated = await telegram_bridge.edit_message(
+            note.telegram_chat_id or "",
+            int(note.telegram_message_id),
+            next_content,
+        )
+        if not telegram_updated:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Telegram could not update the mirrored message, so Pocketing "
+                    "kept the original note"
+                ),
+            )
+
+    for field, value in update_data.items():
+        if field == "structured_content":
+            note.structured_content = json.dumps(value, ensure_ascii=False) if value else None
+        else:
+            setattr(note, field, value)
     await session.commit()
     await session.refresh(note, attribute_names=["attachments"])
     tc = await get_thread_count(session, note.id)
@@ -191,6 +272,7 @@ async def list_thread_messages(
 async def add_thread_message(
     note_id: int,
     content: str = Form(...),
+    structured_content: str | None = Form(default=None),
     files: list[UploadFile] = File(default=[]),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
@@ -201,11 +283,29 @@ async def add_thread_message(
         raise HTTPException(status_code=422, detail="Message too long (max 4000 chars)")
 
     note = await get_note_or_404(note_id, session)
-    message = await create_thread_message(session, note, content, files=files if files else None)
+    document = None
+    if structured_content:
+        try:
+            parsed = json.loads(structured_content)
+            document = validate_structured_content(parsed)
+        except (TypeError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+    if document:
+        content = rich_text_to_plain_text(document) or content
+        if len(content) > 4000:
+            raise HTTPException(status_code=422, detail="Message too long (max 4000 chars)")
+
+    message = await create_thread_message(
+        session,
+        note,
+        content,
+        files=files if files else None,
+        structured_content=document,
+    )
 
     # Send thread reply to Telegram
     preview = note.content[:50] + ("…" if len(note.content) > 50 else "")
-    await telegram_bridge.send_message(f"💬 Re: {preview}\n{content}")
+    await telegram_bridge.send_message(f"💬 Re: {preview}\n{message.content}")
 
     # Send each file to Telegram
     if message.attachments:

@@ -1,3 +1,4 @@
+import type { JSONContent } from '@tiptap/core';
 import type { FileSearchResult, Note, NoteUpdate, RuntimeStatus, ThreadMessage } from '@/types';
 
 const configuredUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
@@ -32,9 +33,10 @@ async function requestRaw<T>(path: string, options?: RequestInit): Promise<T> {
 export const notesApi = {
   list: () => request<Note[]>('/api/notes'),
   status: () => request<RuntimeStatus>('/api/status'),
-  create: (content: string, files?: File[]) => {
+  create: (content: string, files?: File[], structuredContent?: JSONContent | null) => {
     const form = new FormData();
     form.append('content', content);
+    if (structuredContent) form.append('structured_content', JSON.stringify(structuredContent));
     if (files) {
       for (const file of files) {
         form.append('files', file);
@@ -58,9 +60,10 @@ export const notesApi = {
 
 export const threadApi = {
   list: (noteId: number) => request<ThreadMessage[]>(`/api/notes/${noteId}/thread`),
-  create: (noteId: number, content: string, files?: File[]) => {
+  create: (noteId: number, content: string, files?: File[], structuredContent?: JSONContent | null) => {
     const form = new FormData();
     form.append('content', content);
+    if (structuredContent) form.append('structured_content', JSON.stringify(structuredContent));
     if (files) {
       for (const file of files) {
         form.append('files', file);

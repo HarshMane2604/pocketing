@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import type { JSONContent } from '@tiptap/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 
 import { CheckIcon, CircleIcon, CopyIcon, PinIcon, ThreadIcon, TrashIcon } from '@/components/Icons';
 import { AttachmentPreview } from '@/components/AttachmentPreview';
+import { RichTextDisplay } from '@/components/RichTextDisplay';
+import { RichTextEditor, type RichTextChange } from '@/components/RichTextEditor';
 import type { Note, NoteUpdate } from '@/types';
 
 function relativeTime(value: string): string {
@@ -15,6 +18,10 @@ function relativeTime(value: string): string {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}d`;
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+}
+
+function normalizeLegacyMarkdown(value: string): string {
+  return value.replace(/\*\*([^*\n]*?\S)\s+\*\*/g, '**$1** ');
 }
 
 interface NoteRowProps {
@@ -30,11 +37,30 @@ interface NoteRowProps {
 export function NoteRow({ note, busy, onUpdate, onDelete, onOpenThread, dragHandleProps, isDragging }: NoteRowProps) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(note.content);
+  const [editDocument, setEditDocument] = useState<JSONContent | null>(note.structured_content);
   const [copied, setCopied] = useState(false);
+  const [clock, setClock] = useState(() => Date.now());
   const copyTimer = useRef<number | undefined>(undefined);
+
+  const editableUntil = new Date(note.editable_until).getTime();
+  const canEdit = note.can_edit
+    && note.source === 'web'
+    && Number.isFinite(editableUntil)
+    && clock < editableUntil;
+  const editMinutesRemaining = canEdit
+    ? Math.max(1, Math.ceil((editableUntil - clock) / 60_000))
+    : 0;
+  const editTitle = canEdit
+    ? note.telegram_sync_available
+      ? `Click to edit (${editMinutesRemaining}m remaining; Telegram will sync)`
+      : `Click to edit (${editMinutesRemaining}m remaining; Telegram sync unavailable)`
+    : note.source === 'telegram'
+      ? 'Telegram messages cannot be edited from Pocketing'
+      : 'The 15-minute edit window has expired';
   
   const tags = [...new Set(Array.from(note.content.matchAll(/(?:^|\s)#([a-zA-Z0-9_-]+)/g)).map(m => m[1]))];
   const displayContent = note.content.replace(/(?:^|\s)#[a-zA-Z0-9_-]+/g, '').trim() || note.content;
+  const renderedContent = normalizeLegacyMarkdown(displayContent);
 
   const cls = [
     'note-row',
@@ -45,24 +71,59 @@ export function NoteRow({ note, busy, onUpdate, onDelete, onOpenThread, dragHand
   ].filter(Boolean).join(' ');
 
   useEffect(() => {
-    if (!editing) setEditContent(note.content);
-  }, [editing, note.content]);
+    if (!editing) {
+      setEditContent(note.content);
+      setEditDocument(note.structured_content);
+    }
+  }, [editing, note.content, note.structured_content]);
 
   useEffect(() => () => {
     if (copyTimer.current) window.clearTimeout(copyTimer.current);
   }, []);
 
+  useEffect(() => {
+    setClock(Date.now());
+    if (!note.can_edit || !Number.isFinite(editableUntil)) return;
+
+    const interval = window.setInterval(() => setClock(Date.now()), 30_000);
+    const expiry = window.setTimeout(
+      () => setClock(Date.now()),
+      Math.max(0, editableUntil - Date.now()) + 50,
+    );
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(expiry);
+    };
+  }, [editableUntil, note.can_edit]);
+
+  useEffect(() => {
+    if (editing && !canEdit) {
+      setEditContent(note.content);
+      setEditDocument(note.structured_content);
+      setEditing(false);
+    }
+  }, [canEdit, editing, note.content, note.structured_content]);
+
   function startEditing() {
-    if (busy) return;
+    if (busy || !canEdit) return;
     setEditContent(note.content);
+    setEditDocument(note.structured_content);
     setEditing(true);
   }
 
-  function finishEditing() {
-    const content = editContent.trim();
+  function finishEditing(editorValue?: RichTextChange) {
+    const rawText = (editorValue?.plainText ?? editContent).trim();
+    const content = rawText || (editorValue && !editorValue.isEmpty ? 'Rich note' : '');
+    const document = editorValue?.document ?? editDocument;
     setEditing(false);
-    if (content && content !== note.content) onUpdate(note, { content });
-    if (!content) setEditContent(note.content);
+    const documentChanged = JSON.stringify(document) !== JSON.stringify(note.structured_content);
+    if (content && (content !== note.content || documentChanged)) {
+      onUpdate(note, { content, structured_content: document });
+    }
+    if (!content) {
+      setEditContent(note.content);
+      setEditDocument(note.structured_content);
+    }
   }
 
   async function copyNote() {
@@ -109,32 +170,35 @@ export function NoteRow({ note, busy, onUpdate, onDelete, onOpenThread, dragHand
           </div>
         )}
         {editing ? (
-          <textarea
+          <RichTextEditor
             autoFocus
-            value={editContent}
-            onChange={(event) => setEditContent(event.target.value)}
-            onBlur={finishEditing}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                setEditContent(note.content);
-                setEditing(false);
-              } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-                event.preventDefault();
-                finishEditing();
-              }
+            document={editDocument}
+            plainText={editContent}
+            onChange={({ document, plainText, isEmpty }: RichTextChange) => {
+              setEditDocument(document);
+              setEditContent(isEmpty ? '' : (plainText || 'Rich note'));
             }}
+            onBlur={finishEditing}
+            onCancel={() => {
+              setEditContent(note.content);
+              setEditDocument(note.structured_content);
+              setEditing(false);
+            }}
+            onSubmit={finishEditing}
             maxLength={4000}
-            aria-label="Edit note"
-            className="note-editor"
+            placeholder="Edit note…"
+            ariaLabel="Edit note"
+            className="rich-editor--inline"
           />
         ) : (
           <div
-            onClick={startEditing}
-            title="Click to edit"
-            className={`note-content editable prose prose-sm dark:prose-invert break-words max-w-none custom-prose${note.is_done ? ' done-text' : ''}`}
+            onClick={canEdit ? startEditing : undefined}
+            title={editTitle}
+            className={`note-content${canEdit ? ' editable' : ''} prose prose-sm dark:prose-invert break-words max-w-none custom-prose${note.is_done ? ' done-text' : ''}`}
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{displayContent}</ReactMarkdown>
+            {note.structured_content
+              ? <RichTextDisplay content={note.structured_content} />
+              : <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{renderedContent}</ReactMarkdown>}
           </div>
         )}
 
@@ -151,6 +215,7 @@ export function NoteRow({ note, busy, onUpdate, onDelete, onOpenThread, dragHand
             </span>
           )}
           {editing && <span>· Ctrl+Enter to save</span>}
+          {canEdit && !editing && <span>· edit {editMinutesRemaining}m</span>}
         </div>
       </div>
 

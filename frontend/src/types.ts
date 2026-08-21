@@ -1,3 +1,5 @@
+import type { JSONContent } from '@tiptap/core';
+
 export interface Attachment {
   id: number;
   filename: string;
@@ -10,6 +12,7 @@ export interface Attachment {
 export interface Note {
   id: number;
   content: string;
+  structured_content: JSONContent | null;
   created_at: string;
   is_pinned: boolean;
   is_done: boolean;
@@ -17,17 +20,21 @@ export interface Note {
   priority: number;
   thread_count: number;
   attachments: Attachment[];
+  can_edit: boolean;
+  editable_until: string;
+  telegram_sync_available: boolean;
 }
 
 export interface ThreadMessage {
   id: number;
   note_id: number;
   content: string;
+  structured_content: JSONContent | null;
   created_at: string;
   attachments: Attachment[];
 }
 
-export type NoteUpdate = Partial<Pick<Note, 'content' | 'is_pinned' | 'is_done' | 'priority'>>;
+export type NoteUpdate = Partial<Pick<Note, 'content' | 'structured_content' | 'is_pinned' | 'is_done' | 'priority'>>;
 
 export type NoteEvent =
   | { type: 'note.created' | 'note.updated'; note: Note }

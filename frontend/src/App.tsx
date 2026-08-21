@@ -17,13 +17,15 @@ import {
 } from '@dnd-kit/sortable';
 
 import { notesApi, websocketUrl } from '@/api';
-import { CheckIcon, FolderIcon, SearchIcon, XIcon } from '@/components/Icons';
+import { CheckIcon, FolderIcon, SearchIcon, SendIcon, XIcon } from '@/components/Icons';
 import { SortableNoteRow } from '@/components/SortableNoteRow';
 import { NoteRow } from '@/components/NoteRow';
 import { ThreadView } from '@/components/ThreadView';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { FileUploadButton } from '@/components/FileUploadButton';
 import { FilesView } from '@/components/FilesView';
+import { FileUploadButton } from '@/components/FileUploadButton';
+import { RichTextEditor, type RichTextChange } from '@/components/RichTextEditor';
+import type { JSONContent } from '@tiptap/core';
 import type { Note, NoteEvent, NoteUpdate, TelegramStatus } from '@/types';
 
 type ConnectionState = 'connecting' | 'connected' | 'offline';
@@ -58,6 +60,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
 export default function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [draft, setDraft] = useState('');
+  const [draftDocument, setDraftDocument] = useState<JSONContent | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -184,17 +187,25 @@ export default function App() {
   const done = newestFirst(visible.filter((note) => note.is_done));
   const openCount = notes.filter((note) => !note.is_done).length;
 
-  async function addNote(event?: React.SyntheticEvent) {
+  async function addNote(event?: React.SyntheticEvent, editorValue?: RichTextChange) {
     event?.preventDefault();
-    const content = draft.trim();
+    const rawText = (editorValue?.plainText ?? draft).trim();
+    const hasRichContent = editorValue ? !editorValue.isEmpty : Boolean(rawText);
+    const content = rawText || (hasRichContent ? 'Rich note' : '');
+    const document = hasRichContent ? (editorValue?.document ?? draftDocument) : null;
     if ((!content && files.length === 0) || saving) return;
     const finalContent = content || '📎 Attachment';
     setSaving(true);
     setError('');
     try {
-      const created = await notesApi.create(finalContent, files.length > 0 ? files : undefined);
+      const created = await notesApi.create(
+        finalContent,
+        files.length > 0 ? files : undefined,
+        document,
+      );
       upsert(created);
       setDraft('');
+      setDraftDocument(null);
       setFiles([]);
       notesApi.status()
         .then((status) => setTelegram(status.telegram))
@@ -445,34 +456,37 @@ export default function App() {
         onDrop={handleDrop}
       >
         <div className="composer-inner">
-          <form onSubmit={(event) => void addNote(event)} className="composer-row">
-            <FileUploadButton files={files} onChange={setFiles} />
-            <textarea
+          <form onSubmit={(event) => void addNote(event)} className="composer-form">
+            <RichTextEditor
               autoFocus
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  void addNote();
-                }
+              document={draftDocument}
+              plainText={draft}
+              onChange={({ document, plainText, isEmpty }: RichTextChange) => {
+                setDraftDocument(document);
+                setDraft(isEmpty ? '' : (plainText || 'Rich note'));
               }}
-              placeholder="Write a note…"
+              onSubmit={(value) => void addNote(undefined, value)}
+              placeholder="Write a note, idea, task, or anything worth keeping…"
               maxLength={4000}
-              aria-label="New note"
-              className="composer-input"
-              rows={1}
-              style={{ resize: 'none' }}
+              ariaLabel="New note"
+              footer={
+                <>
+                  <div className="editor-footer-start">
+                    <FileUploadButton files={files} onChange={setFiles} />
+                    <span className="editor-shortcut">Ctrl+Enter to send</span>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={(!draft.trim() && files.length === 0) || saving}
+                    aria-label={saving ? 'Sending note' : 'Send note'}
+                    title="Save and send to Telegram"
+                    className="composer-send"
+                  >
+                    {saving ? <span className="spin">↻</span> : <SendIcon size={17} />}
+                  </button>
+                </>
+              }
             />
-            <button
-              type="submit"
-              disabled={(!draft.trim() && files.length === 0) || saving}
-              aria-label="Send"
-              title="Save and send to Telegram"
-              className="composer-send"
-            >
-              {saving ? <span className="spin">↻</span> : 'Send'}
-            </button>
           </form>
 
           <div className={`app-footer ${telegramOk ? 'status-ok' : 'status-warn'}`}>

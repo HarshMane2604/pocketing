@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,12 @@ from app.service import create_note, get_setting, save_file_data, set_setting
 
 logger = logging.getLogger(__name__)
 TELEGRAM_CHAT_SETTING = "telegram_chat_id"
+
+
+@dataclass(frozen=True)
+class TelegramMessageRef:
+    chat_id: str
+    message_id: int
 
 
 class TelegramBridge:
@@ -201,17 +208,21 @@ class TelegramBridge:
                 source="telegram",
                 created_at=created_at,
                 pre_attachments=pre_attachments or None,
+                telegram_chat_id=chat_id,
+                telegram_message_id=(
+                    int(message["message_id"]) if message.get("message_id") is not None else None
+                ),
             )
         self.last_message_at = datetime.now(timezone.utc)
 
-    async def send_message(self, content: str) -> bool:
+    async def send_message(self, content: str) -> TelegramMessageRef | None:
         """Send a browser-created note to the paired Telegram chat."""
         if not self.token:
             self.last_error = "Telegram is not configured"
-            return False
+            return None
         if not self.active_chat_id:
             self.last_error = "Send the bot a message once to pair this inbox"
-            return False
+            return None
 
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         try:
@@ -221,6 +232,43 @@ class TelegramBridge:
                     json={"chat_id": self.active_chat_id, "text": content},
                 )
                 response.raise_for_status()
+                payload = response.json()
+                if not payload.get("ok"):
+                    raise RuntimeError("Telegram returned an unsuccessful response")
+                result = payload.get("result") or {}
+                message_id = result.get("message_id")
+                result_chat_id = (result.get("chat") or {}).get("id")
+                if message_id is None or result_chat_id is None:
+                    raise RuntimeError("Telegram did not return a message reference")
+            self.last_error = None
+            self.last_sent_at = datetime.now(timezone.utc)
+            return TelegramMessageRef(
+                chat_id=str(result_chat_id),
+                message_id=int(message_id),
+            )
+        except Exception as error:
+            self.last_error = self.safe_error(error)
+            logger.warning("Telegram send failed: %s", self.last_error)
+            return None
+
+    async def edit_message(self, chat_id: str, message_id: int, content: str) -> bool:
+        """Edit a text message previously sent by this bot."""
+        if not self.token:
+            self.last_error = "Telegram is not configured"
+            return False
+
+        url = f"https://api.telegram.org/bot{self.token}/editMessageText"
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
+                response = await client.post(
+                    url,
+                    json={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "text": content,
+                    },
+                )
+                response.raise_for_status()
                 if not response.json().get("ok"):
                     raise RuntimeError("Telegram returned an unsuccessful response")
             self.last_error = None
@@ -228,7 +276,7 @@ class TelegramBridge:
             return True
         except Exception as error:
             self.last_error = self.safe_error(error)
-            logger.warning("Telegram send failed: %s", self.last_error)
+            logger.warning("Telegram edit failed: %s", self.last_error)
             return False
 
     async def send_file(
