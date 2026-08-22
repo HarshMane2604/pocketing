@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     telegram_allowed_chat_id: str = ""
     max_upload_size: int = 50 * 1024 * 1024  # 50 MB
     upload_dir: str = "data/uploads"
+    ollama_url: str = "http://127.0.0.1:11434/api/chat"
+    ollama_model: str = "qwen3.5:4b"
 
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.development"),

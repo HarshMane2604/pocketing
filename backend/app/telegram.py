@@ -141,7 +141,27 @@ class TelegramBridge:
 
             content = (message.get("text") or message.get("caption") or "").strip()
             # Commands can pair the chat, but are not stored as notes.
-            if content.startswith("/"):
+            if content.startswith("/") and not content.lower().endswith("/ai"):
+                return
+
+            # ── suffix /ai → Qwen AI agent ────────────────────────────────────
+            if content.lower().endswith("/ai"):
+                user_query = content[:-3].strip()  # strip trailing " /ai"
+                if not user_query:
+                    await self.send_message(
+                        "🤖 Usage: <your question> /ai\n"
+                        "Example: find my Redis note /ai"
+                    )
+                    return
+
+                # Acknowledge immediately so user knows the bot received it
+                await self.send_message("🤔 Thinking...")
+
+                # Lazy import to avoid circular imports at module load time
+                from mcp_pocketing.ai_client import run_ai_agent
+
+                ai_response = await run_ai_agent(user_query, chat_id=chat_id)
+                await self.send_message(ai_response)
                 return
 
             # ── Detect incoming media ──────────────────────────────────────────
