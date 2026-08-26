@@ -134,3 +134,11 @@ does not require frontend changes.
 
 ## For Restarting Backend
 systemctl --user restart pocketing
+
+systemctl --user daemon-reload
+
+systemctl --user enable pocketing-mcp.service
+
+systemctl --user start pocketing-mcp.service
+
+systemctl --user status pocketing-mcp.service --no-pager

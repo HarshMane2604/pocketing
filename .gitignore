@@ -8,3 +8,4 @@ frontend/dist/
 *.log
 .env.development
 uploads
+pocketing_logging

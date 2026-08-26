@@ -616,12 +616,39 @@ async def read_file_content(
                 status_code=500,
                 detail=f"Failed to extract pdf: {e}"
             )
+
+    # -------------------------------------------------
+    # Word Documents (.docx)
+    # -------------------------------------------------
+
+    if att.content_type == "application/vnd.openxmlfomats-officedocument.wordprocessingml.document" or att.filename.endswith(".docx"):
+        try:
+            import docx
+            doc = docx.Document(file_path)
+
+            #extract text from all paragraphs
+
+            pages = [p.text for p in doc.paragraphs if p.text.strip()]
+            extracted_text = "\n".join(pages)
+
+            return {
+                "id": att.id,
+                "filename": att.filename,
+                "content_type": att.content_type,
+                "text": extracted_text,
+                "character_count": len(extracted_text),
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to extract docx: {e}"
+            )
     
     # -------------------------------------------------
     # Plain text
     # -------------------------------------------------
-
-    if att.content_type.startswith("text/"):
+    text_types = ["application/json", "application/xml", "application/x-yaml", "application/javascript"]
+    if att.content_type.startswith("text/") or att.content_type in text_types:
         try:
             extracted_text = file_path.read_text(
                 encoding="utf-8",
@@ -705,6 +732,59 @@ async def send_file_to_telegram(file_id: int, session: AsyncSession=Depends(get_
         "filename": att.filename,
         "content_type": att.content_type,
         "size_bytes": att.size_bytes,
+    }
+
+
+@router.post("/files/send-local")
+async def send_local_file_to_telegram(
+    payload: dict,
+    session: AsyncSession = Depends(get_session)
+) -> dict:
+    """Send a local file from the sandbox directory to Telegram."""
+    filename = payload.get("filename")
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+        
+    sandbox_dir = Path("/home/harsh/pocketing/pocketing/sandbox")
+    file_path = sandbox_dir / filename
+    
+    # Security: Prevent traversing outside the sandbox directory
+    if not file_path.resolve().is_relative_to(sandbox_dir.resolve()):
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found in sandbox")
+        
+    # Send via Telegram bridge
+    success = await telegram_bridge.send_file(
+        file_path=file_path,
+        filename=filename,
+        caption=f"📎 {filename} (from sandbox)",
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to send file via Telegram")
+        
+    # Create a trace note
+    from datetime import datetime, timezone
+    time_str = datetime.now(timezone.utc).astimezone().strftime("%I:%M %p")
+    trace_note = Note(
+        content=f"📤 `{filename}` (sandbox) sent to Telegram at {time_str}",
+        source="system",
+    )
+    session.add(trace_note)
+    await session.commit()
+    await session.refresh(trace_note, attribute_names=["attachments"])
+    
+    await connections.broadcast({
+        "type": "note.created",
+        "note": serialize_note(trace_note, 0),
+    })
+    
+    return {
+        "status": "sent",
+        "filename": filename,
+        "size_bytes": file_path.stat().st_size,
     }
 
 

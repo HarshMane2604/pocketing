@@ -15,7 +15,9 @@ from app.database import SessionLocal
 from app.models import Attachment
 from app.service import create_note, get_setting, save_file_data, set_setting
 
-logger = logging.getLogger(__name__)
+from pocketing_logging.logger import get_telegram_logger
+
+logger = get_telegram_logger()
 TELEGRAM_CHAT_SETTING = "telegram_chat_id"
 
 
@@ -35,6 +37,7 @@ class TelegramBridge:
         self.last_error: str | None = None
         self.last_message_at: datetime | None = None
         self.last_sent_at: datetime | None = None
+        self.active_ai_tasks: dict[str, asyncio.Task[None]] = {}
 
     def status(self) -> dict[str, object]:
         return {
@@ -140,29 +143,26 @@ class TelegramBridge:
                 logger.info("Telegram chat paired automatically")
 
             content = (message.get("text") or message.get("caption") or "").strip()
+
+            # ── Handle explicit reset/revoke commands ──────────────────────
+            if content.lower() in ("/reset", "/revoke"):
+                # Cancel ongoing AI task if running
+                if chat_id in self.active_ai_tasks:
+                    self.active_ai_tasks[chat_id].cancel()
+                    logger.info("Cancelled ongoing AI task for chat_id %s", chat_id)
+                
+                # Reset conversation context in DB
+                from app.conversation_service import reset_conversation
+                await reset_conversation(chat_id)
+                
+                await self.send_message("🔄 Conversation reset. Started a fresh session.")
+                return
+
             # Commands can pair the chat, but are not stored as notes.
             if content.startswith("/") and not content.lower().endswith("/ai"):
                 return
 
-            # ── suffix /ai → Qwen AI agent ────────────────────────────────────
-            if content.lower().endswith("/ai"):
-                user_query = content[:-3].strip()  # strip trailing " /ai"
-                if not user_query:
-                    await self.send_message(
-                        "🤖 Usage: <your question> /ai\n"
-                        "Example: find my Redis note /ai"
-                    )
-                    return
-
-                # Acknowledge immediately so user knows the bot received it
-                await self.send_message("🤔 Thinking...")
-
-                # Lazy import to avoid circular imports at module load time
-                from mcp_pocketing.ai_client import run_ai_agent
-
-                ai_response = await run_ai_agent(user_query, chat_id=chat_id)
-                await self.send_message(ai_response)
-                return
+            # (Note: AI flow moved to the end of the method to capture media first)
 
             # ── Detect incoming media ──────────────────────────────────────────
             # Each entry: (file_id, filename, content_type)
@@ -222,20 +222,130 @@ class TelegramBridge:
             created_at = (
                 datetime.fromtimestamp(date_val, tz=timezone.utc) if date_val else None
             )
-            await create_note(
-                session,
-                final_content,
-                source="telegram",
-                created_at=created_at,
-                pre_attachments=pre_attachments or None,
-                telegram_chat_id=chat_id,
-                telegram_message_id=(
-                    int(message["message_id"]) if message.get("message_id") is not None else None
-                ),
-            )
+            is_ai_query = content.lower().endswith("/ai")
+            
+            # Save the note if it's not an AI query, OR if it has attachments (so the AI can access them)
+            if not (is_ai_query and not pre_attachments):
+                await create_note(
+                    session,
+                    final_content,
+                    source="telegram",
+                    created_at=created_at,
+                    pre_attachments=pre_attachments or None,
+                    telegram_chat_id=chat_id,
+                    telegram_message_id=(
+                        int(message["message_id"]) if message.get("message_id") is not None else None
+                    ),
+                )
+
+            # ── suffix /ai → Qwen AI agent ────────────────────────────────────
+            if is_ai_query:
+                user_query = content[:-3].strip()  # strip trailing " /ai"
+                if not user_query:
+                    await self.send_message(
+                        "🤖 Usage: <your question> /ai\n"
+                        "Example: find my Redis note /ai"
+                    )
+                    return
+
+                # If there were attachments, append a system note so Qwen knows they exist in Pocketing!
+                if pre_attachments:
+                    filenames = ", ".join([att.filename for att in pre_attachments])
+                    user_query += f"\n\n[System Note: The user attached the following file(s) which have been saved to Pocketing: {filenames}. You can use search_files or get_file_info to find and read them.]"
+
+                # Send an animated face (eyebrows + eyes) and cycle it while the agent works
+                FACE_NEUTRAL = "<pre> ⌒   ⌒ \n( ◉ ◉ )\n  ...</pre>"
+                FACE_BLINK   = "<pre> ⌒   ⌒ \n( ˉ  ˉ )\n  ...</pre>"
+                FACE_LEFT    = "<pre> ⌒   ⌒ \n(◉   ◉ )\n...</pre>"
+                FACE_RIGHT   = "<pre> ⌒   ⌒ \n( ◉   ◉)\n    ...</pre>"
+                FACE_FURROW  = "<pre>  ╲  ╱  \n( ◉  ◉ )\n  ...</pre>"
+
+                thinking_ref = await self.send_message(FACE_NEUTRAL, parse_mode="HTML")
+
+                async def _animate_thinking():
+                    if not thinking_ref:
+                        return
+                    # Weighted so it mostly rests neutral, occasionally blinks/looks/furrows
+                    frames = [
+                        FACE_NEUTRAL, FACE_NEUTRAL, FACE_BLINK,
+                        FACE_NEUTRAL, FACE_LEFT, FACE_NEUTRAL,
+                        FACE_FURROW, FACE_NEUTRAL, FACE_RIGHT,
+                    ]
+                    i = 0
+                    while True:
+                        await asyncio.sleep(1.0)
+                        i = (i + 1) % len(frames)
+                        await self.edit_message(
+                            thinking_ref.chat_id,
+                            thinking_ref.message_id,
+                            frames[i],
+                            parse_mode="HTML",
+                        )
+
+                animation_task = asyncio.create_task(_animate_thinking())
+
+                async def _run_agent_task():
+                    from mcp_pocketing.ai_client import run_ai_agent
+                    try:
+                        ai_response = await run_ai_agent(user_query, chat_id=chat_id)
+                        
+                        # Stop animation first to prevent it overwriting the final answer
+                        animation_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await animation_task
+
+                        if thinking_ref:
+                            await self.edit_message(
+                                thinking_ref.chat_id,
+                                thinking_ref.message_id,
+                                ai_response,
+                            )
+                        else:
+                            await self.send_message(ai_response)
+                    except asyncio.CancelledError:
+                        animation_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await animation_task
+                        if thinking_ref:
+                            await self.edit_message(
+                                thinking_ref.chat_id,
+                                thinking_ref.message_id,
+                                "🛑 AI process stopped by user.",
+                            )
+                        else:
+                            await self.send_message("🛑 AI process stopped.")
+                        raise
+                    except Exception as exc:
+                        animation_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await animation_task
+                        err_msg = f"⚠️ AI error: {type(exc).__name__}: {exc}"
+                        if thinking_ref:
+                            await self.edit_message(
+                                thinking_ref.chat_id,
+                                thinking_ref.message_id,
+                                err_msg,
+                            )
+                        else:
+                            await self.send_message(err_msg)
+                    finally:
+                        animation_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await animation_task
+                        self.active_ai_tasks.pop(chat_id, None)
+
+                # Cancel previous active AI task for this chat if any, to avoid queueing
+                if chat_id in self.active_ai_tasks:
+                    self.active_ai_tasks[chat_id].cancel()
+                    with suppress(asyncio.CancelledError):
+                        await self.active_ai_tasks[chat_id]
+
+                ai_task = asyncio.create_task(_run_agent_task())
+                self.active_ai_tasks[chat_id] = ai_task
+                return
         self.last_message_at = datetime.now(timezone.utc)
 
-    async def send_message(self, content: str) -> TelegramMessageRef | None:
+    async def send_message(self, content: str, parse_mode: str | None = None) -> TelegramMessageRef | None:
         """Send a browser-created note to the paired Telegram chat."""
         if not self.token:
             self.last_error = "Telegram is not configured"
@@ -247,9 +357,12 @@ class TelegramBridge:
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
+                payload = {"chat_id": self.active_chat_id, "text": content}
+                if parse_mode:
+                    payload["parse_mode"] = parse_mode
                 response = await client.post(
                     url,
-                    json={"chat_id": self.active_chat_id, "text": content},
+                    json=payload,
                 )
                 response.raise_for_status()
                 payload = response.json()
@@ -271,7 +384,7 @@ class TelegramBridge:
             logger.warning("Telegram send failed: %s", self.last_error)
             return None
 
-    async def edit_message(self, chat_id: str, message_id: int, content: str) -> bool:
+    async def edit_message(self, chat_id: str, message_id: int, content: str, parse_mode: str | None = None) -> bool:
         """Edit a text message previously sent by this bot."""
         if not self.token:
             self.last_error = "Telegram is not configured"
@@ -280,13 +393,16 @@ class TelegramBridge:
         url = f"https://api.telegram.org/bot{self.token}/editMessageText"
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
+                payload = {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": content,
+                }
+                if parse_mode:
+                    payload["parse_mode"] = parse_mode
                 response = await client.post(
                     url,
-                    json={
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                        "text": content,
-                    },
+                    json=payload,
                 )
                 response.raise_for_status()
                 if not response.json().get("ok"):
@@ -294,6 +410,10 @@ class TelegramBridge:
             self.last_error = None
             self.last_sent_at = datetime.now(timezone.utc)
             return True
+        except httpx.HTTPStatusError as error:
+            self.last_error = f"Telegram HTTP {error.response.status_code}: {error.response.text}"
+            logger.warning("Telegram edit failed: %s", self.last_error)
+            return False
         except Exception as error:
             self.last_error = self.safe_error(error)
             logger.warning("Telegram edit failed: %s", self.last_error)

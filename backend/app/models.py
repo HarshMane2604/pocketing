@@ -127,3 +127,49 @@ class AiConversation(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+
+class Conversation(Base):
+    """A converstaion session between a user and AI."""
+    __tablename__ = "conversations"
+    __table_args__ = {"sqlite_autoincrement": True}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    chat_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    last_activate_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    messages: Mapped[list["ConversationMessage"]] = relationship(
+        "ConversationMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ConversationMessage.created_at",
+    )
+
+class ConversationMessage(Base):
+    """A single messages in a conversation."""
+    __tablename__ = "conversation_messages"
+    __table_args__ = {"sqlite_autoincrement": True}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    tool_calls_json: Mapped[str | None] = mapped_column(Text, nullable=True) #JSON Blob
+    tool_call_id: Mapped[str | None] = mapped_column(String(100), nullable=True) # for tool results
+    created_at : Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")
+

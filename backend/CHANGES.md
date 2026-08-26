@@ -135,3 +135,14 @@ Skipped (too noisy): /ws, /health, /api/status, /assets/, /icons/
     # AI conversation history in DB
     sqlite3 ~/pocketing/pocketing/backend/data/pocketing.db \
       "SELECT id, user_query, ai_response, created_at FROM ai_conversations ORDER BY created_at DESC LIMIT 10;"
+
+---
+
+## Change 4: Animated "Thinking..." Message
+
+### Enhancement
+Instead of sending a static "🤔 Thinking..." message and then sending a second message with the actual AI response, the bot now:
+1. Sends an initial "🤔 Thinking..." message.
+2. Cycles the dots every 1.5 seconds (Thinking. → Thinking.. → Thinking...).
+3. Edits that original message in-place to display Qwen's final answer.
+This creates a much cleaner UX in Telegram without leaving behind "Thinking" messages in the chat history.
