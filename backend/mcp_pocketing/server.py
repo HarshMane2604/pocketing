@@ -9,6 +9,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 GITHUB_PAT = os.getenv("GITHUB_PAT")
+GITHUB_PAT_OEMMART = os.getenv("GITHUB_PAT_OEMMART")
+
+def log_ai(msg: str):
+    try:
+        from pocketing_logging.logger import get_ai_logger
+        logger = get_ai_logger()
+        logger.info(f"[mcp_server] {msg}")
+    except Exception:
+        pass
+    import sys
+    sys.stderr.write(f"[mcp_server] {msg}\n")
+    sys.stderr.flush()
 
 mcp = MCPServer("Pocketing Lab")
 POCKETING_API = "http://127.0.0.1:8010"
@@ -847,7 +859,7 @@ async def search_github(
     projects, or code hosted on GitHub.
 
     Parameters:
-    - query: The search term (e.g. "Pocketing", "resume analyzer")
+    - query: The search term (e.g. "Pocketing", "resume analyzer"). If the user mentions a specific owner or organization (e.g. "oemmart"), ALWAYS include it in the query (e.g. "oemmart Webscrapper-Framework") to ensure it is found.
     - scope: Set to "mine" to search ONLY the authenticated user's repositories (e.g. for "my repository", "my project", "my code"). Set to "all" to search all public repositories on GitHub. Default is "all".
 
     Do NOT use this for:
@@ -865,9 +877,24 @@ async def search_github(
     if not query.strip():
         return {"error": "GitHub search query cannot be empty"}
     
+    # Force search query to target the correct repository if referencing the webscrapper framework
+    query_lower = query.lower()
+    if "webscraper-framework" in query_lower or "webscrapper-framework" in query_lower:
+        query = "oemmart/Webscrapper-Framework"
+
+    # Normalize misspelled organization name "oemart" -> "oemmart"
+    if "oemart" in query.lower() and "oemmart" not in query.lower():
+        import re
+        query = re.sub(re.escape("oemart"), "oemmart", query, flags=re.IGNORECASE)
+
+    log_ai(f"search_github called: query='{query}', scope='{scope}'")
+    pat = GITHUB_PAT_OEMMART if "oemmart" in query.lower() else GITHUB_PAT
+    token_name = "GITHUB_PAT_OEMMART" if pat == GITHUB_PAT_OEMMART else "GITHUB_PAT"
+    log_ai(f"Selected token: {token_name} (length: {len(pat) if pat else 0})")
+
     headers = {
         "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {GITHUB_PAT}",
+        "Authorization": f"Bearer {pat}",
         "X-Github-Api-Version": "2022-11-28",
     }
 
@@ -891,6 +918,7 @@ async def search_github(
             params=params,
             timeout=15.0,
         )
+        log_ai(f"GitHub search API response: status={response.status_code}, url={response.url}")
 
         if response.status_code == 401:
             return {"error": "Github authentication failed"}
@@ -935,7 +963,7 @@ async def list_github_prs(repository: str, state:str = "open") -> dict:
     Use this when the user asks whether anyone has raised a PR,
     wants to see open pull requests, or wants to inspect team PRs.
 
-    repository must be in owner/name format.
+    repository must be in owner/name format. If the user mentions an organization/owner and a repository name (e.g. "oemmart organization in Webscrapper-Framework"), you MUST try to construct the 'owner/name' format directly (e.g., "oemmart/Webscrapper-Framework") and call list_github_prs directly without doing generic searches first.
 
     state can be:
     - open
@@ -951,13 +979,28 @@ async def list_github_prs(repository: str, state:str = "open") -> dict:
     if not repository:
         return {"error": "Repository name not mentioned"}
     
+    # Force correct repository if referencing the webscrapper framework
+    repo_lower = repository.lower()
+    if "webscraper-framework" in repo_lower or "webscrapper-framework" in repo_lower:
+        repository = "oemmart/Webscrapper-Framework"
+
+    # Normalize misspelled organization name "oemart" -> "oemmart"
+    if "oemart" in repository.lower() and "oemmart" not in repository.lower():
+        import re
+        repository = re.sub(re.escape("oemart"), "oemmart", repository, flags=re.IGNORECASE)
+    
+    log_ai(f"list_github_prs called: repository='{repository}', state='{state}'")
+    pat = GITHUB_PAT_OEMMART if "oemmart" in repository.lower() else GITHUB_PAT
+    token_name = "GITHUB_PAT_OEMMART" if pat == GITHUB_PAT_OEMMART else "GITHUB_PAT"
+    log_ai(f"Selected token: {token_name} (length: {len(pat) if pat else 0})")
+
     async with httpx.AsyncClient() as client:
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28"
         }
-        if GITHUB_PAT:
-            headers["Authorization"] = f"Bearer {GITHUB_PAT}"
+        if pat:
+            headers["Authorization"] = f"Bearer {pat}"
 
         # If the repository is just the name (e.g. "Pocketing"), resolve the owner automatically
         if "/" not in repository:
@@ -979,6 +1022,7 @@ async def list_github_prs(repository: str, state:str = "open") -> dict:
             params=params,
             timeout=15.0
         )
+        log_ai(f"GitHub list PRs API response: status={response.status_code}, url={response.url}")
 
         if response.status_code == 401:
             return {"error": "Github authentication failed"}
@@ -1023,7 +1067,32 @@ async def list_github_prs(repository: str, state:str = "open") -> dict:
             ]
         }
 
+#----create_github_pr-----
 
+@mcp.tool()
+async def create_github_pr(
+    repository:str,
+    title: str,
+    head: str,
+    base: str,
+    body: str,
+    draft: str, 
+) -> dict:
+    """
+    Create a pull request on GitHub.
+
+    Use this when the user explicitly asks to create or raise
+    a pull request.
+
+    repository must be in owner/repository format.
+    head is the source branch.
+    base is the target branch.
+
+    This is a write operation and should only be executed after
+    the user explicitly confirms the proposed pull request.
+    """
+
+    
 
 
 
