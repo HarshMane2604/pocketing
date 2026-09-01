@@ -9,3 +9,5 @@ frontend/dist/
 .env.development
 uploads
 pocketing_logging
+sandbox
+system_prompt.md

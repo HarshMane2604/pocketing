@@ -121,8 +121,11 @@ class TelegramBridge:
             file_resp = await client.get(download_url)
             file_resp.raise_for_status()
             return file_resp.content, file_path
+        except httpx.HTTPStatusError as err:
+            logger.warning("Telegram file download HTTPStatusError: %s - Response: %s", err, err.response.text)
+            return None
         except Exception as err:
-            logger.warning("Telegram file download failed: %s", type(err).__name__)
+            logger.warning("Telegram file download failed: %s - %s", type(err).__name__, err)
             return None
 
     async def capture(self, update: dict[str, Any]) -> None:
