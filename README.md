@@ -253,9 +253,3 @@ pocketing/
 └── Documentation/
     └── codebase.md
 ```
-
----
-
-## Keeping It Online
-
-The service and Telegram bridge run while your computer is awake. Sleep, hibernation, or loss of internet pauses delivery until the machine resumes. For 24/7 availability, deploy the backend to a VPS or cloud server.
