@@ -17,12 +17,15 @@ import {
 } from '@dnd-kit/sortable';
 
 import { notesApi, websocketUrl } from '@/api';
-import { CheckIcon, FolderIcon, SearchIcon, SendIcon, XIcon } from '@/components/Icons';
+import { CheckIcon, SearchIcon, SendIcon, XIcon } from '@/components/Icons';
 import { SortableNoteRow } from '@/components/SortableNoteRow';
 import { NoteRow } from '@/components/NoteRow';
 import { ThreadView } from '@/components/ThreadView';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { FilesView } from '@/components/FilesView';
+import { LinksView } from '@/components/LinksView';
+import { OnHoldView } from '@/components/OnHoldView';
+import { NavRail, type View } from '@/components/NavRail';
 import { FileUploadButton } from '@/components/FileUploadButton';
 import { RichTextEditor, type RichTextChange } from '@/components/RichTextEditor';
 import type { JSONContent } from '@tiptap/core';
@@ -59,6 +62,8 @@ function Section({ title, count, children }: { title: string; count: number; chi
 
 export default function App() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [links, setLinks] = useState<Note[]>([]);
+  const [onHoldNotes, setOnHoldNotes] = useState<Note[]>([]);
   const [draft, setDraft] = useState('');
   const [draftDocument, setDraftDocument] = useState<JSONContent | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -69,9 +74,11 @@ export default function App() {
   const [error, setError] = useState('');
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [telegram, setTelegram] = useState<TelegramStatus | null>(null);
+  const [view, setView] = useState<View>('notes');
   const [activeThread, setActiveThread] = useState<Note | null>(null);
-  const [showFiles, setShowFiles] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [linkToast, setLinkToast] = useState(false);
+  const linkToastTimer = useRef<number | undefined>(undefined);
   const reconnectTimer = useRef<number | undefined>(undefined);
 
   const sensors = useSensors(
@@ -98,18 +105,64 @@ export default function App() {
     }
   }
 
-  const upsert = useCallback((incoming: Note) => {
-    setNotes((current) => current.some((note) => note.id === incoming.id)
-      ? current.map((note) => note.id === incoming.id ? incoming : note)
-      : [incoming, ...current]);
+  const upsertNote = useCallback((incoming: Note) => {
+    if (incoming.is_on_hold) {
+      // Route to on-hold list
+      setOnHoldNotes((current) => current.some((n) => n.id === incoming.id)
+        ? current.map((n) => n.id === incoming.id ? incoming : n)
+        : [incoming, ...current]);
+      // Remove from active notes and links
+      setNotes((current) => current.filter((n) => n.id !== incoming.id));
+      setLinks((current) => current.filter((l) => l.id !== incoming.id));
+    } else if (incoming.kind === 'file') {
+      // Remove from notes, links, and on-hold
+      setNotes((current) => current.filter((n) => n.id !== incoming.id));
+      setLinks((current) => current.filter((l) => l.id !== incoming.id));
+      setOnHoldNotes((current) => current.filter((n) => n.id !== incoming.id));
+    } else if (incoming.kind === 'link') {
+      // Route to links list
+      setLinks((current) => current.some((l) => l.id === incoming.id)
+        ? current.map((l) => l.id === incoming.id ? incoming : l)
+        : [incoming, ...current]);
+      // Remove from notes and on-hold
+      setNotes((current) => current.filter((n) => n.id !== incoming.id));
+      setOnHoldNotes((current) => current.filter((n) => n.id !== incoming.id));
+    } else {
+      // Route to notes list
+      setNotes((current) => current.some((n) => n.id === incoming.id)
+        ? current.map((n) => n.id === incoming.id ? incoming : n)
+        : [incoming, ...current]);
+      // Remove from links and on-hold
+      setLinks((current) => current.filter((l) => l.id !== incoming.id));
+      setOnHoldNotes((current) => current.filter((n) => n.id !== incoming.id));
+    }
   }, []);
 
+  // Fetch notes
   useEffect(() => {
     let active = true;
-    notesApi.list()
+    notesApi.list('note')
       .then((result) => active && setNotes(result))
       .catch((reason: Error) => active && setError(reason.message))
       .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, []);
+
+  // Fetch links
+  useEffect(() => {
+    let active = true;
+    notesApi.list('link')
+      .then((result) => active && setLinks(result))
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  // Fetch on-hold notes
+  useEffect(() => {
+    let active = true;
+    notesApi.list('note', true)
+      .then((result) => active && setOnHoldNotes(result))
+      .catch(() => undefined);
     return () => { active = false; };
   }, []);
 
@@ -147,9 +200,11 @@ export default function App() {
         const event = JSON.parse(message.data) as NoteEvent;
         if (event.type === 'note.deleted') {
           setNotes((current) => current.filter((note) => note.id !== event.id));
+          setLinks((current) => current.filter((link) => link.id !== event.id));
+          setOnHoldNotes((current) => current.filter((note) => note.id !== event.id));
           setActiveThread((current) => current?.id === event.id ? null : current);
         } else if (event.type === 'note.created' || event.type === 'note.updated') {
-          upsert(event.note);
+          upsertNote(event.note);
         } else if (event.type === 'thread.created' || event.type === 'thread.deleted') {
           setNotes((current) =>
             current.map((note) =>
@@ -175,7 +230,7 @@ export default function App() {
       if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
       socket?.close();
     };
-  }, [upsert]);
+  }, [upsertNote]);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase();
@@ -203,10 +258,18 @@ export default function App() {
         files.length > 0 ? files : undefined,
         document,
       );
-      upsert(created);
+      upsertNote(created);
       setDraft('');
       setDraftDocument(null);
       setFiles([]);
+
+      // If the note was classified as a link, show a toast
+      if (created.kind === 'link') {
+        setLinkToast(true);
+        if (linkToastTimer.current) window.clearTimeout(linkToastTimer.current);
+        linkToastTimer.current = window.setTimeout(() => setLinkToast(false), 2500);
+      }
+
       notesApi.status()
         .then((status) => setTelegram(status.telegram))
         .catch(() => undefined);
@@ -221,7 +284,7 @@ export default function App() {
     setBusyIds((current) => new Set(current).add(note.id));
     setError('');
     try {
-      upsert(await notesApi.update(note.id, update));
+      upsertNote(await notesApi.update(note.id, update));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not update note');
     } finally {
@@ -239,6 +302,8 @@ export default function App() {
     try {
       await notesApi.remove(note.id);
       setNotes((current) => current.filter((item) => item.id !== note.id));
+      setLinks((current) => current.filter((item) => item.id !== note.id));
+      setOnHoldNotes((current) => current.filter((item) => item.id !== note.id));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not delete note');
     } finally {
@@ -261,6 +326,11 @@ export default function App() {
       )
     );
   }, []);
+
+  function handleViewChange(newView: View) {
+    setView(newView);
+    setActiveThread(null);
+  }
 
   // Drag-and-drop file handling on the composer
   function handleDragEnter(e: React.DragEvent) {
@@ -332,6 +402,9 @@ export default function App() {
           : 'Telegram connected';
   const telegramOk = telegram?.configured && telegram.target_ready && !telegram.last_error;
 
+  // Determine what content to show
+  const showComposer = view === 'notes' && !activeThread;
+
   return (
     <div className="app-shell">
       {/* ── Header ── */}
@@ -345,15 +418,6 @@ export default function App() {
           </div>
 
           <div className="header-right">
-            <button
-              type="button"
-              onClick={() => { setShowFiles(true); setActiveThread(null); }}
-              className={`header-files-btn${showFiles ? ' active' : ''}`}
-              title="Browse files"
-              aria-label="Browse files"
-            >
-              <FolderIcon size={14} />
-            </button>
             <div
               title={connection === 'connected' ? 'Live updates connected' : 'Reconnecting…'}
               className={`live-indicator ${connection === 'connected' ? 'connected' : 'offline'}`}
@@ -366,134 +430,162 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── Content ── */}
-      {showFiles ? (
-        <FilesView
-          onBack={() => setShowFiles(false)}
-          onGoToNote={(noteId) => {
-            setShowFiles(false);
-            // Find the note and open its thread, or just scroll to it
-            const target = notes.find((n) => n.id === noteId);
-            if (target) setActiveThread(target);
-          }}
-        />
-      ) : activeThread ? (
-        <ThreadView
-          note={activeThread}
-          onBack={() => setActiveThread(null)}
-          onThreadCountChange={handleThreadCountChange}
-        />
-      ) : (
-        <div className="content-area">
-          <div className="content-inner">
-            {/* Search */}
-            <div className="search-bar">
-              <SearchIcon size={13} className="search-icon" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search…"
-                aria-label="Search notes"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  aria-label="Clear search"
-                  className="search-clear"
-                >
-                  <XIcon size={12} />
-                </button>
-              )}
-            </div>
-
-            {/* Error */}
-            {error && <div className="error-banner">{error}</div>}
-
-            {/* Notes */}
-            {loading ? (
-              <div className="loading-spinner">
-                <div className="spinner" />
-              </div>
-            ) : (
-              <>
-                {renderSortableList(pinned, 'Pinned')}
-                {renderSortableList(inbox, 'Inbox')}
-                <Section title="Done" count={done.length}>
-                  {done.map((note) => (
-                    <NoteRow
-                      key={note.id}
-                      note={note}
-                      busy={busyIds.has(note.id)}
-                      onUpdate={(item, update) => void updateNote(item, update)}
-                      onDelete={(item) => void deleteNote(item)}
-                      onOpenThread={handleOpenThread}
-                    />
-                  ))}
-                </Section>
-
-                {visible.length === 0 && (
-                  <div className="empty-state">
-                    <div className="empty-state-icon">
-                      {search ? <SearchIcon size={20} /> : <CheckIcon size={20} />}
-                    </div>
-                    <p className="empty-state-title">{search ? 'No results' : 'All clear'}</p>
-                    <p className="empty-state-sub">{search ? 'Try a different search' : 'Notes you send will appear here'}</p>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Composer ── */}
-      {!activeThread && !showFiles && <div
-        className={`composer${dragOver ? ' drag-over' : ''}`}
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-        onDragOver={handleDragOverEvent}
-        onDrop={handleDrop}
-      >
-        <div className="composer-inner">
-          <form onSubmit={(event) => void addNote(event)} className="composer-form">
-            <RichTextEditor
-              autoFocus
-              document={draftDocument}
-              plainText={draft}
-              onChange={({ document, plainText, isEmpty }: RichTextChange) => {
-                setDraftDocument(document);
-                setDraft(isEmpty ? '' : (plainText || 'Rich note'));
+      {/* ── Main layout: content + nav rail ── */}
+      <div className="app-body">
+        {/* ── Content ── */}
+        <div className="app-main">
+          {view === 'files' ? (
+            <FilesView
+              onBack={() => setView('notes')}
+              onGoToNote={(noteId) => {
+                setView('notes');
+                // Find the note and open its thread, or just scroll to it
+                const target = notes.find((n) => n.id === noteId);
+                if (target) setActiveThread(target);
               }}
-              onSubmit={(value) => void addNote(undefined, value)}
-              placeholder="Write a note, idea, task, or anything worth keeping…"
-              maxLength={4000}
-              ariaLabel="New note"
-              footer={
-                <>
-                  <div className="editor-footer-start">
-                    <FileUploadButton files={files} onChange={setFiles} />
-                    <span className="editor-shortcut">Ctrl+Enter to send</span>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={(!draft.trim() && files.length === 0) || saving}
-                    aria-label={saving ? 'Sending note' : 'Send note'}
-                    title="Save and send to Telegram"
-                    className="composer-send"
-                  >
-                    {saving ? <span className="spin">↻</span> : <SendIcon size={17} />}
-                  </button>
-                </>
-              }
             />
-          </form>
+          ) : view === 'links' ? (
+            <LinksView
+              links={links}
+              busyIds={busyIds}
+              onUpdate={(item, update) => void updateNote(item, update)}
+              onDelete={(item) => void deleteNote(item)}
+            />
+          ) : view === 'onhold' ? (
+            <OnHoldView
+              onHoldNotes={onHoldNotes}
+              busyIds={busyIds}
+              onUpdate={(item, update) => void updateNote(item, update)}
+              onDelete={(item) => void deleteNote(item)}
+              onOpenThread={handleOpenThread}
+            />
+          ) : activeThread ? (
+            <ThreadView
+              note={activeThread}
+              onBack={() => setActiveThread(null)}
+              onThreadCountChange={handleThreadCountChange}
+            />
+          ) : (
+            <div className="content-area">
+              <div className="content-inner">
+                {/* Search */}
+                <div className="search-bar">
+                  <SearchIcon size={13} className="search-icon" />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search…"
+                    aria-label="Search notes"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch('')}
+                      aria-label="Clear search"
+                      className="search-clear"
+                    >
+                      <XIcon size={12} />
+                    </button>
+                  )}
+                </div>
 
-          <div className={`app-footer ${telegramOk ? 'status-ok' : 'status-warn'}`}>
-            {telegramLabel}
-          </div>
+                {/* Error */}
+                {error && <div className="error-banner">{error}</div>}
+
+                {/* Link toast */}
+                {linkToast && (
+                  <div className="link-toast">Moved to Links</div>
+                )}
+
+                {/* Notes */}
+                {loading ? (
+                  <div className="loading-spinner">
+                    <div className="spinner" />
+                  </div>
+                ) : (
+                  <>
+                    {renderSortableList(pinned, 'Pinned')}
+                    {renderSortableList(inbox, 'Inbox')}
+                    <Section title="Done" count={done.length}>
+                      {done.map((note) => (
+                        <NoteRow
+                          key={note.id}
+                          note={note}
+                          busy={busyIds.has(note.id)}
+                          onUpdate={(item, update) => void updateNote(item, update)}
+                          onDelete={(item) => void deleteNote(item)}
+                          onOpenThread={handleOpenThread}
+                        />
+                      ))}
+                    </Section>
+
+                    {visible.length === 0 && (
+                      <div className="empty-state">
+                        <div className="empty-state-icon">
+                          {search ? <SearchIcon size={20} /> : <CheckIcon size={20} />}
+                        </div>
+                        <p className="empty-state-title">{search ? 'No results' : 'All clear'}</p>
+                        <p className="empty-state-sub">{search ? 'Try a different search' : 'Notes you send will appear here'}</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Composer ── */}
+          {showComposer && <div
+            className={`composer${dragOver ? ' drag-over' : ''}`}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOverEvent}
+            onDrop={handleDrop}
+          >
+            <div className="composer-inner">
+              <form onSubmit={(event) => void addNote(event)} className="composer-form">
+                <RichTextEditor
+                  autoFocus
+                  document={draftDocument}
+                  plainText={draft}
+                  onChange={({ document, plainText, isEmpty }: RichTextChange) => {
+                    setDraftDocument(document);
+                    setDraft(isEmpty ? '' : (plainText || 'Rich note'));
+                  }}
+                  onSubmit={(value) => void addNote(undefined, value)}
+                  placeholder="Write a note, idea, task, or anything worth keeping…"
+                  maxLength={4000}
+                  ariaLabel="New note"
+                  footer={
+                    <>
+                      <div className="editor-footer-start">
+                        <FileUploadButton files={files} onChange={setFiles} />
+                        <span className="editor-shortcut">Ctrl+Enter to send</span>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={(!draft.trim() && files.length === 0) || saving}
+                        aria-label={saving ? 'Sending note' : 'Send note'}
+                        title="Save and send to Telegram"
+                        className="composer-send"
+                      >
+                        {saving ? <span className="spin">↻</span> : <SendIcon size={17} />}
+                      </button>
+                    </>
+                  }
+                />
+              </form>
+
+              <div className={`app-footer ${telegramOk ? 'status-ok' : 'status-warn'}`}>
+                {telegramLabel}
+              </div>
+            </div>
+          </div>}
         </div>
-      </div>}
+
+        {/* ── Nav Rail ── */}
+        <NavRail view={activeThread ? 'notes' : view} onViewChange={handleViewChange} onHoldCount={onHoldNotes.length} />
+      </div>
     </div>
   );
 }

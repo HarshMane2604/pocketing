@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { filesApi } from '@/api';
-import { DownloadIcon, FileIcon, TrashIcon, XIcon } from '@/components/Icons';
+import { DownloadIcon, FileIcon, TrashIcon } from '@/components/Icons';
+import { MediaPreviewModal, type MediaTarget } from '@/components/MediaPreviewModal';
 import type { Attachment } from '@/types';
 
 function formatSize(bytes: number): string {
@@ -15,7 +16,7 @@ interface AttachmentPreviewProps {
 }
 
 export function AttachmentPreview({ attachments, onDeleted }: AttachmentPreviewProps) {
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [media, setMedia] = useState<MediaTarget | null>(null);
   const [deleting, setDeleting] = useState<Set<number>>(new Set());
 
   if (!attachments || attachments.length === 0) return null;
@@ -49,23 +50,23 @@ export function AttachmentPreview({ attachments, onDeleted }: AttachmentPreviewP
 
           if (isImage(att.content_type)) {
             return (
-              <div key={att.id} className="attachment-item attachment-image">
+              <div key={att.id} className="attachment-item attachment-image cursor-pointer">
                 <img
                   src={url}
                   alt={att.filename}
                   loading="lazy"
-                  onClick={() => setLightbox(url)}
+                  onClick={() => setMedia({ url, filename: att.filename, type: 'image' })}
                 />
                 <div className="attachment-overlay">
                   <span className="attachment-name" title={att.filename}>{att.filename}</span>
                   <div className="attachment-actions-mini">
-                    <a href={downloadUrl} title="Download" className="att-action-btn">
+                    <a href={downloadUrl} title="Download" className="att-action-btn" onClick={(e) => e.stopPropagation()}>
                       <DownloadIcon size={12} />
                     </a>
                     {onDeleted && (
                       <button
                         type="button"
-                        onClick={() => void handleDelete(att)}
+                        onClick={(e) => { e.stopPropagation(); void handleDelete(att); }}
                         disabled={deleting.has(att.id)}
                         title="Delete"
                         className="att-action-btn att-delete"
@@ -81,18 +82,22 @@ export function AttachmentPreview({ attachments, onDeleted }: AttachmentPreviewP
 
           if (isVideo(att.content_type)) {
             return (
-              <div key={att.id} className="attachment-item attachment-video">
-                <video src={url} controls preload="metadata" />
+              <div
+                key={att.id}
+                className="attachment-item attachment-video cursor-pointer"
+                onClick={() => setMedia({ url, filename: att.filename, type: 'video' })}
+              >
+                <video src={url} preload="metadata" />
                 <div className="attachment-overlay">
                   <span className="attachment-name" title={att.filename}>{att.filename}</span>
                   <div className="attachment-actions-mini">
-                    <a href={downloadUrl} title="Download" className="att-action-btn">
+                    <a href={downloadUrl} title="Download" className="att-action-btn" onClick={(e) => e.stopPropagation()}>
                       <DownloadIcon size={12} />
                     </a>
                     {onDeleted && (
                       <button
                         type="button"
-                        onClick={() => void handleDelete(att)}
+                        onClick={(e) => { e.stopPropagation(); void handleDelete(att); }}
                         disabled={deleting.has(att.id)}
                         title="Delete"
                         className="att-action-btn att-delete"
@@ -109,7 +114,7 @@ export function AttachmentPreview({ attachments, onDeleted }: AttachmentPreviewP
           if (isAudio(att.content_type)) {
             return (
               <div key={att.id} className="attachment-item attachment-audio">
-                <audio src={url} controls preload="metadata" />
+                <audio src={url} controls preload="metadata" onClick={(e) => e.stopPropagation()} />
                 <div className="attachment-overlay">
                   <span className="attachment-name" title={att.filename}>{att.filename}</span>
                   <div className="attachment-actions-mini">
@@ -164,20 +169,7 @@ export function AttachmentPreview({ attachments, onDeleted }: AttachmentPreviewP
         })}
       </div>
 
-      {/* Lightbox for images */}
-      {lightbox && (
-        <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
-          <button
-            type="button"
-            className="lightbox-close"
-            onClick={() => setLightbox(null)}
-            aria-label="Close"
-          >
-            <XIcon size={20} />
-          </button>
-          <img src={lightbox} alt="Preview" className="lightbox-image" onClick={(e) => e.stopPropagation()} />
-        </div>
-      )}
+      <MediaPreviewModal media={media} onClose={() => setMedia(null)} />
     </>
   );
 }

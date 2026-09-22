@@ -1,8 +1,10 @@
 """Shared note operations for browser and messaging bridges."""
 
 import json
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -18,6 +20,27 @@ from app.schemas import AttachmentResponse, NoteResponse, ThreadMessageResponse
 settings = get_settings()
 NOTE_EDIT_WINDOW_MINUTES = 15
 NOTE_EDIT_WINDOW = timedelta(minutes=NOTE_EDIT_WINDOW_MINUTES)
+
+# ── URL-only detection ──
+_BARE_URL_RE = re.compile(
+    r"^https?://\S+$",
+    re.IGNORECASE,
+)
+
+
+def is_link_only(text: str) -> bool:
+    """Return True when *text* is a single http(s) URL and nothing else.
+
+    Trailing whitespace / newlines are tolerated.
+    """
+    trimmed = text.strip()
+    if not trimmed or " " in trimmed or "\t" in trimmed or "\n" in trimmed:
+        return False
+    if not _BARE_URL_RE.match(trimmed):
+        return False
+    # Final sanity: urlparse should see a valid scheme + netloc
+    parsed = urlparse(trimmed)
+    return bool(parsed.scheme in ("http", "https") and parsed.netloc)
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -55,6 +78,7 @@ def serialize_attachment(att: Attachment) -> dict[str, object]:
 def serialize_note(note: Note, thread_count: int = 0) -> dict[str, object]:
     data = NoteResponse.model_validate(note).model_dump(mode="json")
     data["thread_count"] = thread_count
+    data["kind"] = note.kind
     data["can_edit"] = note_can_edit(note)
     data["editable_until"] = note_editable_until(note).isoformat().replace("+00:00", "Z")
     data["telegram_sync_available"] = bool(
@@ -200,9 +224,15 @@ async def create_note(
     kwargs = {}
     if created_at is not None:
         kwargs["created_at"] = created_at
+
+    # Auto-classify: link-only messages (no files) become kind="link"
+    has_attachments = bool(files) or bool(pre_attachments)
+    kind = "link" if (not has_attachments and is_link_only(content)) else "note"
+
     note = Note(
         content=content.strip(),
         source=source,
+        kind=kind,
         structured_content=(json.dumps(structured_content, ensure_ascii=False) if structured_content else None),
         telegram_chat_id=telegram_chat_id,
         telegram_message_id=telegram_message_id,

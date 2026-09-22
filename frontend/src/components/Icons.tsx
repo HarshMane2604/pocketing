@@ -144,3 +144,39 @@ export const ExternalLinkIcon = (props: IconProps) => (
     <line x1="10" y1="14" x2="21" y2="3" />
   </Icon>
 );
+
+/* Chain-link icon for the Links page */
+export const LinkIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </Icon>
+);
+
+/* Notepad icon for the Notes page */
+export const NotesIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+    <polyline points="10 9 9 9 8 9" />
+  </Icon>
+);
+
+/* Plus icon for future sections */
+export const PlusIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </Icon>
+);
+
+/* Pause / On Hold icon */
+export const PauseIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="9" />
+    <line x1="10" y1="15" x2="10" y2="9" />
+    <line x1="14" y1="15" x2="14" y2="9" />
+  </Icon>
+);

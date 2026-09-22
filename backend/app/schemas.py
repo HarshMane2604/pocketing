@@ -111,8 +111,10 @@ class NoteUpdate(BaseModel):
     content: str | None = Field(default=None, min_length=1, max_length=4000)
     is_pinned: bool | None = None
     is_done: bool | None = None
+    is_on_hold: bool | None = None
     priority: int | None = None
     structured_content: dict[str, Any] | None = None
+    kind: str | None = None
 
     @field_validator("content")
     @classmethod
@@ -157,7 +159,9 @@ class NoteResponse(BaseModel):
     created_at: datetime
     is_pinned: bool
     is_done: bool
+    is_on_hold: bool = False
     source: str
+    kind: str = "note"
     priority: int
     thread_count: int = 0
     attachments: list[AttachmentResponse] = []

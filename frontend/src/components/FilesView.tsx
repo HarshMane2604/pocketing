@@ -15,6 +15,7 @@ import {
   XIcon,
 } from '@/components/Icons';
 import { DropdownMenu } from '@/components/DropdownMenu';
+import { MediaPreviewModal, type MediaTarget } from '@/components/MediaPreviewModal';
 import type { FileSearchResult } from '@/types';
 
 function formatSize(bytes: number): string {
@@ -62,7 +63,7 @@ export function FilesView({ onBack, onGoToNote }: FilesViewProps) {
   const [typeFilter, setTypeFilter] = useState('');
   const [sort, setSort] = useState('newest');
   const [deleting, setDeleting] = useState<Set<number>>(new Set());
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [media, setMedia] = useState<MediaTarget | null>(null);
   const debounceRef = useRef<number | undefined>(undefined);
 
   const fetchFiles = useCallback(async (s: string, t: string, srt: string) => {
@@ -219,8 +220,14 @@ export function FilesView({ onBack, onGoToNote }: FilesViewProps) {
                 <div key={file.id} className={`files-card${deleting.has(file.id) ? ' is-deleting' : ''}`}>
                   {/* Thumbnail area */}
                   <div
-                    className={`files-card-thumb${showThumb || showVideoThumb ? ' has-preview' : ''}`}
-                    onClick={showThumb ? () => setLightbox(url) : undefined}
+                    className={`files-card-thumb${showThumb || showVideoThumb ? ' has-preview cursor-pointer' : ''}`}
+                    onClick={
+                      showThumb
+                        ? () => setMedia({ url, filename: file.filename, type: 'image' })
+                        : showVideoThumb
+                          ? () => setMedia({ url, filename: file.filename, type: 'video' })
+                          : undefined
+                    }
                   >
                     {showThumb ? (
                       <img src={url} alt={file.filename} loading="lazy" />
@@ -281,25 +288,7 @@ export function FilesView({ onBack, onGoToNote }: FilesViewProps) {
         )}
       </div>
 
-      {/* Lightbox */}
-      {lightbox && (
-        <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
-          <button
-            type="button"
-            className="lightbox-close"
-            onClick={() => setLightbox(null)}
-            aria-label="Close"
-          >
-            <XIcon size={20} />
-          </button>
-          <img
-            src={lightbox}
-            alt="Preview"
-            className="lightbox-image"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
+      <MediaPreviewModal media={media} onClose={() => setMedia(null)} />
     </div>
   );
 }

@@ -31,7 +31,8 @@ async function requestRaw<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const notesApi = {
-  list: () => request<Note[]>('/api/notes'),
+  list: (kind: string = 'note', onHold: boolean = false) =>
+    request<Note[]>(`/api/notes?kind=${encodeURIComponent(kind)}${onHold ? '&on_hold=true' : ''}`),
   status: () => request<RuntimeStatus>('/api/status'),
   create: (content: string, files?: File[], structuredContent?: JSONContent | null) => {
     const form = new FormData();

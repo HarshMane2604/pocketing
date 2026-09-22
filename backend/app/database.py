@@ -48,6 +48,15 @@ async def initialize_database() -> None:
         # Backfill the source field introduced in v1 without losing old notes.
         columns = await connection.execute(text("PRAGMA table_info(notes)"))
         column_names = {row[1] for row in columns}
+        if "is_done" in column_names: # reference check
+            pass
+        if "is_on_hold" not in column_names:
+            await connection.execute(
+                text(
+                    "ALTER TABLE notes ADD COLUMN is_on_hold BOOLEAN "
+                    "NOT NULL DEFAULT 0"
+                )
+            )
         if "source" not in column_names:
             await connection.execute(
                 text(
@@ -80,4 +89,24 @@ async def initialize_database() -> None:
         if "structured_content" not in thread_column_names:
             await connection.execute(
                 text("ALTER TABLE thread_messages ADD COLUMN structured_content TEXT")
+            )
+
+        # ── kind column (note vs link) ──
+        if "kind" not in column_names:
+            await connection.execute(
+                text(
+                    "ALTER TABLE notes ADD COLUMN kind VARCHAR(20) "
+                    "NOT NULL DEFAULT 'note'"
+                )
+            )
+            # Backfill: existing notes whose content is a bare URL and have
+            # no attachments become kind='link'.
+            await connection.execute(
+                text(
+                    "UPDATE notes SET kind = 'link' "
+                    "WHERE kind = 'note' "
+                    "AND TRIM(content) LIKE 'http%://%' "
+                    "AND TRIM(content) NOT LIKE '% %' "
+                    "AND id NOT IN (SELECT DISTINCT note_id FROM attachments WHERE note_id IS NOT NULL)"
+                )
             )

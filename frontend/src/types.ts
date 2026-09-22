@@ -16,7 +16,9 @@ export interface Note {
   created_at: string;
   is_pinned: boolean;
   is_done: boolean;
+  is_on_hold: boolean;
   source: 'web' | 'telegram';
+  kind: 'note' | 'link' | 'file';
   priority: number;
   thread_count: number;
   attachments: Attachment[];
@@ -34,7 +36,7 @@ export interface ThreadMessage {
   attachments: Attachment[];
 }
 
-export type NoteUpdate = Partial<Pick<Note, 'content' | 'structured_content' | 'is_pinned' | 'is_done' | 'priority'>>;
+export type NoteUpdate = Partial<Pick<Note, 'content' | 'structured_content' | 'is_pinned' | 'is_done' | 'is_on_hold' | 'priority' | 'kind'>>;
 
 export type NoteEvent =
   | { type: 'note.created' | 'note.updated'; note: Note }

@@ -54,9 +54,15 @@ async def get_note_or_404(note_id: int, session: AsyncSession) -> Note:
 @router.get("/notes", response_model=list[NoteResponse])
 async def list_notes(
     search: str | None = None,
+    kind: str = "note",
+    on_hold: bool = False,
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
     query = select(Note).options(selectinload(Note.attachments))
+    # Filter by kind (note or link)
+    if kind in ("note", "link"):
+        query = query.where(Note.kind == kind)
+    query = query.where(Note.is_on_hold == on_hold)
     if search and search.strip():
         query = query.where(Note.content.ilike(f"%{search.strip()}%"))
     query = query.order_by(
