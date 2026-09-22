@@ -180,3 +180,11 @@ export const PauseIcon = (props: IconProps) => (
     <line x1="14" y1="15" x2="14" y2="9" />
   </Icon>
 );
+
+/* Reset / Refresh icon */
+export const RefreshIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+  </Icon>
+);

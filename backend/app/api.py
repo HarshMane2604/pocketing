@@ -163,6 +163,23 @@ async def reorder_notes(
     return Response(status_code=204)
 
 
+@router.put("/notes/reset_order", status_code=204)
+async def reset_notes_order(
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    query = select(Note).where(Note.priority > 0).options(selectinload(Note.attachments))
+    result = await session.execute(query)
+    notes = result.scalars().all()
+
+    for note in notes:
+        note.priority = 0
+        tc = await get_thread_count(session, note.id)
+        await connections.broadcast({"type": "note.updated", "note": serialize_note(note, tc)})
+
+    await session.commit()
+    return Response(status_code=204)
+
+
 @router.patch("/notes/{note_id}", response_model=NoteResponse)
 async def update_note(
     note_id: int,

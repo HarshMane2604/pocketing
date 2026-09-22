@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 
 import { notesApi, websocketUrl } from '@/api';
-import { CheckIcon, SearchIcon, SendIcon, XIcon } from '@/components/Icons';
+import { CheckIcon, SearchIcon, SendIcon, XIcon, RefreshIcon } from '@/components/Icons';
 import { SortableNoteRow } from '@/components/SortableNoteRow';
 import { NoteRow } from '@/components/NoteRow';
 import { ThreadView } from '@/components/ThreadView';
@@ -79,6 +79,8 @@ export default function App() {
   const [dragOver, setDragOver] = useState(false);
   const [linkToast, setLinkToast] = useState(false);
   const linkToastTimer = useRef<number | undefined>(undefined);
+  const [resetToast, setResetToast] = useState('');
+  const resetToastTimer = useRef<number | undefined>(undefined);
   const reconnectTimer = useRef<number | undefined>(undefined);
 
   const sensors = useSensors(
@@ -319,6 +321,24 @@ export default function App() {
     setActiveThread(note);
   }
 
+  const handleResetOrder = async () => {
+    if (!notes.some(n => n.priority > 0)) {
+      setResetToast('Notes are already in correct order');
+      if (resetToastTimer.current) window.clearTimeout(resetToastTimer.current);
+      resetToastTimer.current = window.setTimeout(() => setResetToast(''), 3000);
+      return;
+    }
+    
+    try {
+      await notesApi.resetOrder();
+      setResetToast('Order reset successfully');
+      if (resetToastTimer.current) window.clearTimeout(resetToastTimer.current);
+      resetToastTimer.current = window.setTimeout(() => setResetToast(''), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reset order');
+    }
+  };
+
   const handleThreadCountChange = useCallback((noteId: number, count: number) => {
     setNotes((current) =>
       current.map((note) =>
@@ -418,6 +438,15 @@ export default function App() {
           </div>
 
           <div className="header-right">
+            <button
+              type="button"
+              onClick={handleResetOrder}
+              className="text-xs mr-4 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer bg-transparent border-none p-0 flex items-center"
+              title="Reset notes order"
+              aria-label="Reset notes order"
+            >
+              <RefreshIcon size={16} />
+            </button>
             <div
               title={connection === 'connected' ? 'Live updates connected' : 'Reconnecting…'}
               className={`live-indicator ${connection === 'connected' ? 'connected' : 'offline'}`}
@@ -494,7 +523,12 @@ export default function App() {
 
                 {/* Link toast */}
                 {linkToast && (
-                  <div className="link-toast">Moved to Links</div>
+                  <div className="bottom-toast">Moved to Links</div>
+                )}
+                
+                {/* Reset toast */}
+                {resetToast && (
+                  <div className="bottom-toast">{resetToast}</div>
                 )}
 
                 {/* Notes */}

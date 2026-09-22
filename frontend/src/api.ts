@@ -57,6 +57,7 @@ export const notesApi = {
     method: 'PUT',
     body: JSON.stringify({ note_ids: noteIds }),
   }),
+  resetOrder: () => request<void>('/api/notes/reset_order', { method: 'PUT' }),
 };
 
 export const threadApi = {
